@@ -1,0 +1,60 @@
+name: CI 自动构建校验
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: 脚本 / 配置 / 规则 校验
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: Shell 语法检查
+        run: |
+          bash -n install.sh
+          bash -n test/unit-test.sh
+
+      - name: JSON 配置校验
+        run: |
+          python3 -m json.tool conf/xray-config.template.json > /dev/null
+          echo "conf/xray-config.template.json: JSON 合法"
+
+      - name: ShellCheck 静态检查 (提示级别, 不阻断)
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -S warning install.sh test/unit-test.sh || true
+          else
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null 2>&1
+            shellcheck -S warning install.sh test/unit-test.sh || true
+          fi
+
+      - name: 内嵌模板与 conf/ 一致性检查
+        run: |
+          awk '/TEMPLATE_JSON_EMBEDDED/{f=!f; next} f' install.sh > /tmp/embedded.json
+          diff <(python3 -m json.tool /tmp/embedded.json) \
+               <(python3 -m json.tool conf/xray-config.template.json) \
+            && echo "内嵌模板与 conf/ 一致"
+
+      - name: v2ray-rules-dat 下载与 sha256 校验
+        run: |
+          mkdir -p /tmp/rules && cd /tmp/rules
+          for f in geoip.dat geosite.dat; do
+            curl -fsSL -o "$f" "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/$f"
+            curl -fsSL -o "$f.sha256sum" "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/$f.sha256sum"
+            sha256sum -c "$f.sha256sum" --strict
+            echo "OK: $f"
+          done
+
+      - name: 函数级单元测试 (Docker 容器内)
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" debian:12 bash -c \
+            'apt-get update -qq && apt-get install -y -qq procps curl python3 >/dev/null 2>&1 \
+             && bash /repo/test/unit-test.sh'

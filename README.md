@@ -1,5 +1,10 @@
 # Xray Reality + 3X-UI 一键安装脚本
 
+[![CI 自动构建校验](https://github.com/richma/xray-oneclick/actions/workflows/ci.yml/badge.svg)](https://github.com/richma/xray-oneclick/actions/workflows/ci.yml)
+[![每周健康检查](https://github.com/richma/xray-oneclick/actions/workflows/health-check.yml/badge.svg)](https://github.com/richma/xray-oneclick/actions/workflows/health-check.yml)
+[![发布 Release](https://github.com/richma/xray-oneclick/actions/workflows/release.yml/badge.svg)](https://github.com/richma/xray-oneclick/actions/workflows/release.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+
 > xray reality docker 镜像前置 · BBR 内核优化 · v2ray-rules-dat 路由增强 · 3X-UI 后台 · 多节点 · 订阅/二维码 · 域名伪装
 
 一条命令在你的服务器上部署完整的 VLESS Reality 代理节点 + 3X-UI 管理面板：

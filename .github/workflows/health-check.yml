@@ -1,0 +1,74 @@
+name: 每周健康检查
+
+on:
+  schedule:
+    # 每周一 04:20 UTC = 北京时间每周一 12:20
+    - cron: '20 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  health-check:
+    name: 上游依赖 / 规则更新 / 脚本完整性
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 上游镜像可用性
+        run: |
+          docker manifest inspect wulabing/xray_docker_reality:latest >/dev/null 2>&1 \
+            && echo "OK: wulabing/xray_docker_reality:latest" || { echo "FAIL: wulabing/xray_docker_reality:latest"; exit 1; }
+          docker manifest inspect ghcr.io/mhsanaei/3x-ui:latest >/dev/null 2>&1 \
+            && echo "OK: ghcr.io/mhsanaei/3x-ui:latest" || { echo "FAIL: ghcr.io/mhsanaei/3x-ui:latest"; exit 1; }
+
+      - name: 上游参考文档可用性
+        run: |
+          for url in \
+            https://raw.githubusercontent.com/wulabing/xray_docker/master/reality/SERVERNAMES_ZH.MD \
+            https://raw.githubusercontent.com/wulabing/xray_docker/master/README_ZH.MD; do
+            code=$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 "$url") \
+              && echo "OK($code): $url" || { echo "FAIL: $url"; exit 1; }
+          done
+
+      - name: v2ray-rules-dat 最新规则可下载并校验
+        run: |
+          mkdir -p /tmp/rules && cd /tmp/rules
+          for f in geoip.dat geosite.dat; do
+            curl -fsSL --max-time 120 -o "$f" "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/$f"
+            curl -fsSL --max-time 60 -o "$f.sha256sum" "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/$f.sha256sum"
+            sha256sum -c "$f.sha256sum" --strict
+            echo "OK: $f ($(du -h "$f" | cut -f1))"
+          done
+
+      - name: 脚本与配置完整性
+        run: |
+          bash -n install.sh
+          python3 -m json.tool conf/xray-config.template.json > /dev/null
+          echo "OK: 脚本语法与配置校验通过"
+
+      - name: 失败时自动创建 Issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '⚠️ 每周健康检查失败';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+            if (issues.some(i => i.title === title)) {
+              console.log('已存在未关闭的同类 Issue, 跳过创建');
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: '上游依赖或脚本校验未通过, 请检查运行日志:\n' +
+                      'https://github.com/' + context.repo.owner + '/' + context.repo.repo + '/actions',
+              });
+            }

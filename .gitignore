@@ -1,0 +1,23 @@
+# ============ 运行时产物 (若在仓库目录内执行安装脚本) ============
+# 节点数据 / 密钥 / 状态 (切勿提交!)
+/nodes/
+/rules/
+/3x-ui/
+nodes.ini
+subscription.txt
+conf/SERVERNAMES_ZH.MD
+/data/
+*.log
+
+# ============ 系统 / 编辑器 ============
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+*.iml
+
+# ============ 测试临时文件 ============
+/tmp/
+*.tmp

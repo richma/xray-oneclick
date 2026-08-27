@@ -1,0 +1,67 @@
+name: 发布 Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 校验并发布 v* Tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 发布前校验
+        run: |
+          bash -n install.sh
+          python3 -m json.tool conf/xray-config.template.json > /dev/null
+          echo "OK: 发布前校验通过 (tag: ${{ github.ref_name }})"
+
+      - name: 生成发布说明
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "## Xray Reality + 3X-UI 一键安装脚本 v${VERSION}"
+            echo ""
+            echo "- 🚀 xray reality docker 镜像前置 (wulabing/xray_docker_reality)"
+            echo "- ⚡ BBR 拥塞控制 + 内核网络优化"
+            echo "- 🗺️ v2ray-rules-dat (Loyalsoldier) 路由规则加强, 每周自动更新"
+            echo "- 🎭 SERVERNAMES_ZH.MD 伪装站点 + 域名 self-steal 模式"
+            echo "- 🖥️ 集成 3X-UI 面板 (多节点/订阅/二维码/统计)"
+            echo "- 🔗 多节点 add-node, 订阅汇总 subscription.txt"
+            echo ""
+            echo "### 快速开始"
+            echo '```bash'
+            echo "curl -fsSL -o install.sh https://raw.githubusercontent.com/richma/xray-oneclick/${GITHUB_REF_NAME}/install.sh"
+            echo "sudo bash install.sh -y"
+            echo '```'
+            echo ""
+            echo "### 变更记录"
+            echo '```'
+            PREV=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
+            if [ -n "$PREV" ]; then
+              git log --oneline --no-decorate "$PREV..${{ github.ref_name }}"
+            else
+              git log --oneline --no-decorate -10
+            fi
+            echo '```'
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            install.sh
+            conf/xray-config.template.json
+            conf/sysctl-xray.conf
+          fail_on_unmatched_files: true
