@@ -18,12 +18,12 @@
 
 ```bash
 # 推荐: 下载后执行 (之后可用 bash install.sh info / add-node 等子命令)
-curl -fsSL -o install.sh https://raw.githubusercontent.com/<你的用户名>/xray-oneclick/main/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/richma/xray-oneclick/main/install.sh
 chmod +x install.sh
 sudo bash install.sh -y          # 全自动安装 (默认参数)
 
 # 或一行管道执行 (仅完成安装, 后续子命令请使用上面的方式)
-bash <(curl -fsSL https://raw.githubusercontent.com/<你的用户名>/xray-oneclick/main/install.sh) -y
+bash <(curl -fsSL https://raw.githubusercontent.com/richma/xray-oneclick/main/install.sh) -y
 ```
 
 交互式菜单：
