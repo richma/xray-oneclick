@@ -1,0 +1,178 @@
+{
+  "log": {
+    "loglevel": "error",
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log"
+  },
+  "api": {
+    "tag": "api",
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService"
+    ]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "dns": {
+    "servers": [
+      "https+local://cloudflare-dns.com/dns-query",
+      "https+local://dns.google/dns-query",
+      "1.1.1.1",
+      "8.8.8.8",
+      "1.0.0.1",
+      "localhost"
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "dokodemo-in",
+      "port": 443,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1",
+        "port": 65432,
+        "network": "tcp"
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "tls"
+        ],
+        "routeOnly": true
+      }
+    },
+    {
+      "tag": "vless-in",
+      "listen": "127.0.0.1",
+      "port": 65432,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "xx",
+            "flow": "xtls-rprx-vision"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "reality",
+        "realitySettings": {
+          "show": true,
+          "target": "xx",
+          "xver": 0,
+          "maxTimeDiff": 0,
+          "minClientVer": "1.0.0",
+          "serverNames": [
+            "xx"
+          ],
+          "privateKey": "xx",
+          "shortIds": [
+            ""
+          ]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "http",
+          "tls"
+        ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "blocked"
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "inboundTag": [
+          "dokodemo-in"
+        ],
+        "domain": [
+          "xx"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "inboundTag": [
+          "dokodemo-in"
+        ],
+        "outboundTag": "blocked"
+      },
+      {
+        "inboundTag": [
+          "api"
+        ],
+        "outboundTag": "api",
+        "type": "field"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ads-all"
+        ],
+        "outboundTag": "blocked"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:private"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:cn"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:cn"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "type": "field",
+        "protocol": [
+          "bittorrent"
+        ],
+        "outboundTag": "blocked"
+      }
+    ]
+  }
+}
