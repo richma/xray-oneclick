@@ -732,6 +732,10 @@ docker run -d --name 3x-ui --restart=unless-stopped \\
   --tty \\
   "\$IMAGE"
 EOF
+  # v2ray-rules-dat: 规则文件存在时挂载进 3X-UI (面板节点同样使用 Loyalsoldier 规则)
+  if [ -f "$RULES_DIR/geoip.dat" ] && [ -f "$RULES_DIR/geosite.dat" ]; then
+    sed -i "/acme:\/root\/.acme.sh/a\  -v '$RULES_DIR/geoip.dat:/app/bin/geoip.dat:ro' \\\\\n  -v '$RULES_DIR/geosite.dat:/app/bin/geosite.dat:ro' \\\\" "$xuidir/run.sh"
+  fi
   chmod +x "$xuidir/run.sh"
 
   info "拉取 3X-UI 镜像 $XUI_IMAGE (约 200MB, 请耐心等待) ..."
