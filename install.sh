@@ -45,6 +45,9 @@ RULES_CRON="/etc/cron.d/xray-rules-update"
 SERVERNAMES_FILE="$INSTALL_DIR/conf/SERVERNAMES_ZH.MD"
 MIN_CLIENT_VER="${MIN_CLIENT_VER:-}"
 SHORTIDS="${SHORTIDS:-}"
+PANEL_PROXY_PORT="${PANEL_PROXY_PORT:-9443}"
+PANEL_PROXY_PASS="${PANEL_PROXY_PASS:-}"
+SUB_SERVER_PORT="${SUB_SERVER_PORT:-8080}"
 
 # 国内镜像 (--mirror 时启用)
 DOCKER_HUB_MIRRORS=(
@@ -103,6 +106,8 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   update-rules  更新 v2ray-rules-dat 规则文件并重启节点
   info          查看节点信息 / 订阅 / 二维码
   xui-port <p>  为 3X-UI 面板开放新端口 (面板内新增入站后使用)
+  panel-proxy   面板 HTTPS 反向代理 (Caddy 自动签发证书): -d <域名> [--panel-port <端口>] [--panel-pass <密码>]
+  sub-server    节点订阅 HTTP 服务 (供主面板"外部订阅"聚合本节点): [--sub-port <端口>]
   uninstall     卸载全部组件
 
 选项:
@@ -113,6 +118,9 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   -e, --email <邮箱>   ACME 证书邮箱 (配合 -d)
   -u, --uuid <UUID>    自定义 UUID (默认自动生成)
   -P, --proxy <URL>    后置代理 socks5:// 或 http:// (家宽IP解锁场景)
+  --panel-port <端口>  面板 HTTPS 反代端口 (默认 9443, 配合 panel-proxy)
+  --panel-pass <密码>  面板 HTTPS 反代登录密码 (可选, 配合 panel-proxy)
+  --sub-port <端口>    节点订阅 HTTP 服务端口 (默认 8080, 配合 sub-server)
   -x, --no-3xui        不安装 3X-UI 面板
   -b, --no-bbr         跳过 BBR 与内核优化
   -c, --no-docker      跳过 Docker 安装 (已安装时)
@@ -125,6 +133,8 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   bash install.sh -p 8443 -n xhttp -x                   # 仅 Reality, 8443 端口 xhttp
   bash install.sh -d vpn.example.com -e a@b.com         # 域名 self-steal
   bash install.sh add-node -p 8443 -y                   # 添加第二个节点
+  bash install.sh panel-proxy -d panel.example.com      # 面板 HTTPS 反代 (Caddy)
+  bash install.sh sub-server                            # 节点订阅 HTTP 服务 (供聚合)
 EOF
 }
 
@@ -1224,6 +1234,65 @@ cmd_uninstall() {
   ok "卸载完成"
 }
 
+# ---------------------------- 面板 HTTPS 反向代理 ------------------------------
+cmd_panel_proxy() {  # cmd_panel_proxy: bash install.sh panel-proxy -d <域名> [--panel-port <端口>] [--panel-pass <密码>]
+  check_root
+  [ -n "$DOMAIN_ARG" ] || die "需要 -d 指定域名: bash install.sh panel-proxy -d panel.example.com"
+  command -v docker >/dev/null 2>&1 || die "Docker 未安装, 请先执行 install"
+  docker ps -a --format '{{.Names}}' | grep -qx "3x-ui" || die "3X-UI 面板未安装, 请先执行 install"
+
+  local xuidir="$INSTALL_DIR/3x-ui"
+  mkdir -p "$xuidir/caddy"
+  info "配置 Caddy 反向代理: https://$DOMAIN_ARG:$PANEL_PROXY_PORT → 127.0.0.1:$XUI_PORT"
+
+  {
+    echo "$DOMAIN_ARG:$PANEL_PROXY_PORT {"
+    if [ -n "$PANEL_PROXY_PASS" ]; then
+      local hash
+      hash="$(docker run --rm caddy:2 caddy hash-password --plaintext "$PANEL_PROXY_PASS" 2>/dev/null)"
+      [ -n "$hash" ] || die "生成密码哈希失败"
+      echo "    basic_auth {"
+      echo "        admin $hash"
+      echo "    }"
+    fi
+    echo "    reverse_proxy 127.0.0.1:$XUI_PORT"
+    echo "}"
+  } > "$xuidir/caddy/Caddyfile"
+  ok "Caddyfile 已生成: $xuidir/caddy/Caddyfile"
+
+  info "拉取 Caddy 镜像 ..."
+  ensure_image "caddy:2"
+  docker rm -f caddy-panel >/dev/null 2>&1 || true
+  info "启动 Caddy 容器 (--network host, 80 用于 ACME 签发证书) ..."
+  docker run -d --name caddy-panel --restart=unless-stopped --network host \
+    -v "$xuidir/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" \
+    -v caddy_data:/data -v caddy_config:/config \
+    caddy:2 || die "Caddy 启动失败: docker logs caddy-panel"
+  open_firewall 80 "$PANEL_PROXY_PORT"
+  ok "面板 HTTPS 反代已启用: https://$DOMAIN_ARG:$PANEL_PROXY_PORT/<面板路径>/"
+  warn "要求: 域名 A 记录已指向本机 IP, 且云防火墙放行 TCP 80 与 $PANEL_PROXY_PORT (证书由 Caddy 自动签发/续期)"
+}
+
+# ---------------------------- 节点订阅 HTTP 服务 -------------------------------
+cmd_sub_server() {  # cmd_sub_server: bash install.sh sub-server [--sub-port <端口>]
+  check_root
+  command -v docker >/dev/null 2>&1 || die "Docker 未安装"
+  [ -s "$SUB_FILE" ] || die "未找到 $SUB_FILE, 请先安装节点 (install / add-node)"
+  local subdir; subdir="$(dirname "$SUB_FILE")"
+
+  info "拉取 busybox 镜像 ..."
+  ensure_image "busybox:latest"
+  docker rm -f sub-server >/dev/null 2>&1 || true
+  info "启动订阅 HTTP 服务 (端口 $SUB_SERVER_PORT) ..."
+  docker run -d --name sub-server --restart=unless-stopped \
+    -p "$SUB_SERVER_PORT:80" \
+    -v "$subdir:/www:ro" \
+    busybox:latest httpd -f -p 80 -h /www || die "sub-server 启动失败: docker logs sub-server"
+  open_firewall "$SUB_SERVER_PORT"
+  ok "订阅 HTTP 服务已启动: http://<本机IP>:$SUB_SERVER_PORT/subscription.txt"
+  info "用途: 在主节点 3X-UI 面板 -> 外部订阅 中添加该 URL, 聚合此节点的节点列表"
+}
+
 # ---------------------------- 菜单 -------------------------------------------
 menu() {
   while true; do
@@ -1241,7 +1310,9 @@ menu() {
     printf "  ${C_CYAN}7)${C_RESET} 更新 v2ray-rules-dat 规则\n"
     printf "  ${C_CYAN}8)${C_RESET} 查看节点信息 / 订阅 / 二维码\n"
     printf "  ${C_CYAN}9)${C_RESET} 3X-UI 开放端口\n"
-    printf "  ${C_CYAN}10)${C_RESET} 卸载\n"
+    printf "  ${C_CYAN}10)${C_RESET} 面板 HTTPS 反向代理 (Caddy)\n"
+    printf "  ${C_CYAN}11)${C_RESET} 节点订阅 HTTP 服务 (供主面板聚合)\n"
+    printf "  ${C_CYAN}12)${C_RESET} 卸载\n"
     printf "  ${C_CYAN}0)${C_RESET} 退出\n"
     echo ""
     printf "请选择操作: "; read -r choice
@@ -1263,7 +1334,10 @@ menu() {
       7) cmd_update_rules; read -r -p "按回车返回菜单 ..." _ ;;
       8) cmd_info; read -r -p "按回车返回菜单 ..." _ ;;
       9) ask "请输入要开放的端口" ""; xui_port "$ANSWER"; read -r -p "按回车返回菜单 ..." _ ;;
-      10) cmd_uninstall; read -r -p "按回车返回菜单 ..." _ ;;
+      10) ask "请输入面板域名" ""; DOMAIN_ARG="$ANSWER"
+          cmd_panel_proxy; read -r -p "按回车返回菜单 ..." _ ;;
+      11) cmd_sub_server; read -r -p "按回车返回菜单 ..." _ ;;
+      12) cmd_uninstall; read -r -p "按回车返回菜单 ..." _ ;;
       0) exit 0 ;;
       *) warn "无效选项" ;;
     esac
@@ -1285,6 +1359,8 @@ while [ $# -gt 0 ]; do
     update-rules) CMD="update-rules"; shift ;;
     info) CMD="info"; shift ;;
     xui-port) CMD="xui-port"; shift ;;
+    panel-proxy) CMD="panel-proxy"; shift ;;
+    sub-server) CMD="sub-server"; shift ;;
     uninstall) CMD="uninstall"; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     -p|--port) REALITY_PORT="$2"; shift 2 ;;
@@ -1293,6 +1369,9 @@ while [ $# -gt 0 ]; do
     -e|--email) ACME_EMAIL_ARG="$2"; shift 2 ;;
     -u|--uuid) UUID_ARG="$2"; shift 2 ;;
     -P|--proxy) PROXY_ARG="$2"; shift 2 ;;
+    --panel-port) PANEL_PROXY_PORT="$2"; shift 2 ;;
+    --panel-pass) PANEL_PROXY_PASS="$2"; shift 2 ;;
+    --sub-port) SUB_SERVER_PORT="$2"; shift 2 ;;
     -x|--no-3xui) INSTALL_3XUI=0; shift ;;
     -b|--no-bbr) ENABLE_BBR=0; shift ;;
     -c|--no-docker) INSTALL_DOCKER=0; shift ;;
@@ -1317,6 +1396,8 @@ case "$CMD" in
   xui-port)
     xui_port "${args[@]:1}"
     ;;
+  panel-proxy) cmd_panel_proxy ;;
+  sub-server) cmd_sub_server ;;
   uninstall) cmd_uninstall ;;
 esac
 fi
