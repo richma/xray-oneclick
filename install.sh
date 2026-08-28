@@ -510,8 +510,13 @@ container_name_for() {  # container_name_for <port>
 }
 
 check_port_free() {
-  local port="$1"
+  local port="$1" name
   command -v ss >/dev/null 2>&1 || return 0
+  name="$(container_name_for "$port")"
+  # 端口被我们自己的节点容器占用时允许重建 (重装/换域名场景)
+  if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+    return 0
+  fi
   if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}$"; then
     die "端口 $port 已被占用, 请更换端口 (-p <端口>)"
   fi
