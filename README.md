@@ -85,8 +85,8 @@ sudo bash install.sh uninstall           # 卸载
 利用 3X-UI 的 subId 非唯一特性，给**每个节点的入站都添加一个 subId 相同的共享客户端**，则该 subId 的订阅自动包含所有节点：
 
 1. 生成一个共享 UUID
-2. 在每个节点（含主节点）的 Reality 入站上添加客户端：`email=jpmain`、`subId=jpmain`、`flow=xtls-rprx-vision`、UUID=共享 UUID（API：`POST /panel/api/clients/add`，JSON `{"client":{...},"inboundIds":[入站ID]}`）
-3. 主面板同步后，订阅（通用 `/sub/jpmain`、Clash `/clash/jpmain`）即包含所有节点
+2. 在每个节点（含主节点）的 Reality 入站上添加客户端：`email=main`、`subId=main`、`flow=xtls-rprx-vision`、UUID=共享 UUID（API：`POST /panel/api/clients/add`，JSON `{"client":{...},"inboundIds":[入站ID]}`）
+3. 主面板同步后，订阅（通用 `/sub/main`、Clash `/clash/main`）即包含所有节点
 4. **后续新增节点（如韩国）只需在其入站添加该共享客户端 → 自动并入同一订阅，客户端无需改任何配置**
 
 > 要求：子节点面板端口(2053)与主节点 80/8080 在云防火墙放行（Anywhere 0.0.0.0/0）；子节点与主节点间网络互通。
