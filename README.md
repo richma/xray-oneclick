@@ -48,8 +48,37 @@ sudo bash install.sh add-node -p 8443    # 添加第二个 Reality 节点 (多�
 sudo bash install.sh update-rules        # 立即更新 v2ray-rules-dat 并重启节点
 sudo bash install.sh info                # 查看所有节点配置/订阅/二维码
 sudo bash install.sh xui-port 8388       # 3X-UI 面板内新增入站后开放端口
+sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 密码  # 面板 HTTPS 反代
+sudo bash install.sh sub-server          # 节点订阅 HTTP 服务 (供主面板聚合)
 sudo bash install.sh uninstall           # 卸载
 ```
+
+## 多服务器架构（主面板聚合多节点）
+
+适合"一台主节点面板 + 多台远程节点"的部署（如 日本主 + 韩国/新加坡 节点）：
+
+```
+                     客户端只订阅一个地址
+                            │
+                     ┌──────▼──────┐
+                     │ 主节点 3X-UI 面板 │  日本 (主)
+                     │  外部订阅聚合  │
+                     └──┬────┬────┬──┘
+              sub-server│    │    │
+             ┌──────────▼┐ ┌─▼────┐ ┌▼─────────┐
+             │ 日本前端节点 │ │ 韩国节点 │ │ 新加坡节点 │
+             └───────────┘ └──────┘ └──────────┘
+```
+
+**部署步骤：**
+
+1. **主节点**（完整安装）：`bash install.sh -y -d jp.example.com` + `bash install.sh panel-proxy -d jp.example.com`（面板 HTTPS）
+2. **远程节点**（仅节点）：`bash install.sh -y -x -d kr.example.com`（`-x` 不装面板，省资源）
+3. **每台节点**启动订阅服务：`bash install.sh sub-server`（默认 8080 端口，输出 `http://<IP>:8080/subscription.txt`）
+4. **主面板聚合**：面板 → **外部订阅** → 添加每台节点的 `http://<IP>:8080/subscription.txt` → 启用
+5. 客户端只订阅主面板地址，自动获得全部节点
+
+> 要求：各节点 `8080` 与主节点 `80/8080` 在云防火墙放行（Anywhere 0.0.0.0/0）；面板"外部订阅"也支持直接填其它 3X-UI 面板的 `/sub/` 订阅链接。
 
 ## 参数说明
 
@@ -62,13 +91,16 @@ sudo bash install.sh uninstall           # 卸载
 | `-e, --email <邮箱>` | ACME 证书邮箱（配合 `-d`） | 无 |
 | `-u, --uuid <UUID>` | 自定义 UUID（默认自动生成） | 自动 |
 | `-P, --proxy <URL>` | 后置代理 `socks5://` 或 `http://`（家宽 IP 解锁流媒体/AI） | 无 |
+| `--panel-port <端口>` | 面板 HTTPS 反代端口（配合 `panel-proxy`） | `9443` |
+| `--panel-pass <密码>` | 面板 HTTPS 反代登录密码（可选，配合 `panel-proxy`） | 无 |
+| `--sub-port <端口>` | 节点订阅 HTTP 服务端口（配合 `sub-server`） | `8080` |
 | `-x, --no-3xui` | 不安装 3X-UI 面板 | 装 |
 | `-b, --no-bbr` | 跳过 BBR 与内核优化 | 不跳 |
 | `-c, --no-docker` | 跳过 Docker 安装 | 不跳 |
 | `-r, --no-rules` | 跳过 v2ray-rules-dat 下载 | 不跳 |
 | `-m, --mirror` | 使用国内镜像（Docker 安装/镜像拉取/GitHub 下载） | 关 |
 
-环境变量：`INSTALL_DIR`（默认 `/opt/xray-oneclick`）、`REALITY_IMAGE`、`XUI_IMAGE`、`XUI_PORT`（默认 `2053`）、`SHORTIDS`、`MIN_CLIENT_VER`。
+环境变量：`INSTALL_DIR`（默认 `/opt/xray-oneclick`）、`REALITY_IMAGE`、`XUI_IMAGE`、`XUI_PORT`（默认 `2053`）、`SHORTIDS`、`MIN_CLIENT_VER`、`PANEL_PROXY_PORT`、`PANEL_PROXY_PASS`、`SUB_SERVER_PORT`。
 
 ## 安装后
 
@@ -123,6 +155,18 @@ sudo bash install.sh -d vpn.example.com -e you@mail.com
 - 脚本自动配置容器内置 Caddy 为域名签发证书并托管伪装站点
 - Reality 的 DEST/SNI 自动切换为你的域名（"偷自己"模式），隐蔽性更高
 - 如需自定义伪装页面：挂载自己的静态站点目录到容器 `/srv/www`
+
+### 5. 面板 HTTPS 反向代理（panel-proxy）
+
+```bash
+sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 你的密码
+```
+
+- 使用 Caddy 为面板签发 Let's Encrypt 证书并做反向代理（可选 `--panel-pass` 加一层登录密码）
+- 访问：`https://panel.example.com:9443/<面板路径>/`
+- 前端节点已配置域名时自动**复用其 Caddy**（同域名同证书，无 80 端口冲突）；否则用独立 Caddy 容器
+- 要求：域名 A 记录指向本机，云防火墙放行 `80`（ACME）与 `9443`
+- 修改端口：`bash install.sh panel-proxy -d panel.example.com --panel-port 2083`
 
 ## 架构说明
 
