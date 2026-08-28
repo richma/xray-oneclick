@@ -1074,6 +1074,13 @@ cmd_install() {
     }
   fi
   if [ -z "$UUID_ARG" ]; then
+    # 复用已有节点的 UUID (重装/换域名时保持客户端配置不变)
+    local existing_info="$INSTALL_DIR/nodes/node_${REALITY_PORT}/data/reality_config_info.txt"
+    if [ -f "$existing_info" ]; then
+      UUID_ARG="$(node_field "$existing_info" uuid)"
+    fi
+  fi
+  if [ -z "$UUID_ARG" ]; then
     UUID_ARG="$(gen_uuid)"
     info "已生成 UUID: $UUID_ARG"
   fi
