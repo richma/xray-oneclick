@@ -252,6 +252,11 @@ sudo rm -rf /opt/xray-oneclick/nodes/node_443
 sudo bash install.sh -y
 ```
 
+**Q: Clash（Mihomo）连面板 Reality 入站报 `REALITY authentication failed`？**
+- 标准 xray 客户端正常但 Clash Meta/Mihomo 报认证失败 → 3x-ui 生成的新版 Reality 配置（含 `settings` 块）与 Mihomo 不兼容
+- 解决：将面板入站重建为经典 Reality 配置（仅 `target/serverNames/privateKey/minClientVer/shortIds`，去掉 `settings` 块等新版字段），保留相同私钥/短ID 则客户端无需改动
+- 详细步骤与配置模板见[部署与使用手册](docs/部署与使用手册.md) FAQ Q9；另请确认客户端为 **Clash Verge Rev（Mihomo 内核）**，旧版 Clash Premium 内核不支持 VLESS
+
 ## 参考项目
 
 - [wulabing/xray_docker](https://github.com/wulabing/xray_docker) — Reality Docker 镜像
