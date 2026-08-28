@@ -49,36 +49,38 @@ sudo bash install.sh update-rules        # 立即更新 v2ray-rules-dat 并重�
 sudo bash install.sh info                # 查看所有节点配置/订阅/二维码
 sudo bash install.sh xui-port 8388       # 3X-UI 面板内新增入站后开放端口
 sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 密码  # 面板 HTTPS 反代
-sudo bash install.sh sub-server          # 节点订阅 HTTP 服务 (供主面板聚合)
+sudo bash install.sh sub-server          # 节点订阅 HTTP 服务 (HTTP 分享节点链接)
 sudo bash install.sh uninstall           # 卸载
 ```
 
-## 多服务器架构（主面板聚合多节点）
+## 多服务器架构（主面板管理多节点）
 
-适合"一台主节点面板 + 多台远程节点"的部署（如 日本主 + 韩国/新加坡 节点）：
+适合"一台主节点面板 + 多台远程节点"的部署（如 日本主 + 韩国/新加坡 节点）。利用 3X-UI 的**主从节点系统**（master 面板通过 API Token 连接子节点面板，同步入站、监控状态、提供订阅）：
 
 ```
-                     客户端只订阅一个地址
-                            │
-                     ┌──────▼──────┐
-                     │ 主节点 3X-UI 面板 │  日本 (主)
-                     │  外部订阅聚合  │
-                     └──┬────┬────┬──┘
-              sub-server│    │    │
-             ┌──────────▼┐ ┌─▼────┐ ┌▼─────────┐
-             │ 日本前端节点 │ │ 韩国节点 │ │ 新加坡节点 │
-             └───────────┘ └──────┘ └──────────┘
+  客户端订阅主面板地址 (http://主节点IP:2096/sub/<subid>)
+                        │
+                 ┌──────▼──────┐
+                 │  主节点面板    │  3X-UI 主从节点系统
+                 │  (master)    │
+                 └──┬────────┬──┘
+          API Token│        │API Token
+             ┌─────▼───┐  ┌─▼─────┐
+             │ 子节点面板  │  │ 子节点面板 │   各节点独立 3x-ui
+             │ (SG/韩国) │  │ (…)    │
+             └──────────┘  └────────┘
 ```
 
 **部署步骤：**
 
 1. **主节点**（完整安装）：`bash install.sh -y -d jp.example.com` + `bash install.sh panel-proxy -d jp.example.com`（面板 HTTPS）
-2. **远程节点**（仅节点）：`bash install.sh -y -x -d kr.example.com`（`-x` 不装面板，省资源）
-3. **每台节点**启动订阅服务：`bash install.sh sub-server`（默认 8080 端口，输出 `http://<IP>:8080/subscription.txt`）
-4. **主面板聚合**：面板 → **外部订阅** → 添加每台节点的 `http://<IP>:8080/subscription.txt` → 启用
-5. 客户端只订阅主面板地址，自动获得全部节点
+2. **子节点**（每台完整安装）：`bash install.sh -y -d kr.example.com`（子节点必须有 3x-ui 才能被主面板管理）
+3. **子节点生成 API Token**：子节点面板 → 面板设置 → API 令牌 → 创建（作用域 `node-sync`）
+4. **主面板添加子节点**：主面板 → **节点** → 添加：填子节点地址/端口(2053)/面板路径/API Token → 保存（自动探测连通）
+5. 主面板自动同步子节点入站，可查看各节点状态/延迟/流量；**所有节点的客户端订阅 URL 统一由主面板提供**
+6. 客户端在主面板创建客户端获取订阅地址，或直接用各节点客户端的 subId 从主面板订阅
 
-> 要求：各节点 `8080` 与主节点 `80/8080` 在云防火墙放行（Anywhere 0.0.0.0/0）；面板"外部订阅"也支持直接填其它 3X-UI 面板的 `/sub/` 订阅链接。
+> 要求：子节点面板端口(2053)与主节点 80/8080 在云防火墙放行（Anywhere 0.0.0.0/0）；子节点与主节点间网络互通。
 
 ## 参数说明
 
