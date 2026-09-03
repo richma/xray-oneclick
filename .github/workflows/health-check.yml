@@ -53,7 +53,7 @@ jobs:
 
       - name: 失败时自动创建 Issue
         if: failure()
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const title = '⚠️ 每周健康检查失败';
