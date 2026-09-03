@@ -15,33 +15,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Shell 语法检查
         run: |
           bash -n install.sh
           bash -n test/unit-test.sh
+          for f in lib/*.sh; do bash -n "$f"; done
 
       - name: JSON 配置校验
         run: |
           python3 -m json.tool conf/xray-config.template.json > /dev/null
           echo "conf/xray-config.template.json: JSON 合法"
+          grep -q '"show": false' conf/xray-config.template.json
+          echo "realitySettings.show=false"
 
       - name: ShellCheck 静态检查 (提示级别, 不阻断)
         run: |
-          if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck -S warning install.sh test/unit-test.sh || true
-          else
-            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null 2>&1
-            shellcheck -S warning install.sh test/unit-test.sh || true
-          fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck >/dev/null 2>&1 || true
+          shellcheck -S warning -x install.sh lib/*.sh test/unit-test.sh || true
 
-      - name: 内嵌模板与 conf/ 一致性检查
+      - name: 确认已去掉内嵌巨型 JSON (改走 conf/ + 仓库引导)
         run: |
-          awk '/TEMPLATE_JSON_EMBEDDED/{f=!f; next} f' install.sh > /tmp/embedded.json
-          diff <(python3 -m json.tool /tmp/embedded.json) \
-               <(python3 -m json.tool conf/xray-config.template.json) \
-            && echo "内嵌模板与 conf/ 一致"
+          if grep -q TEMPLATE_JSON_EMBEDDED install.sh; then
+            echo "install.sh 不应再内嵌 TEMPLATE_JSON_EMBEDDED"
+            exit 1
+          fi
+          test -d lib && test -f lib/00-common.sh
 
       - name: v2ray-rules-dat 下载与 sha256 校验
         run: |
@@ -56,5 +56,5 @@ jobs:
       - name: 函数级单元测试 (Docker 容器内)
         run: |
           docker run --rm -v "$PWD:/repo:ro" debian:12 bash -c \
-            'apt-get update -qq && apt-get install -y -qq procps curl python3 >/dev/null 2>&1 \
+            'apt-get update -qq && apt-get install -y -qq procps curl python3 openssl >/dev/null 2>&1 \
              && bash /repo/test/unit-test.sh'

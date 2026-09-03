@@ -5,7 +5,7 @@
 [![发布 Release](https://github.com/richma/xray-oneclick/actions/workflows/release.yml/badge.svg)](https://github.com/richma/xray-oneclick/actions/workflows/release.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-> xray reality docker 镜像前置 · BBR 内核优化 · v2ray-rules-dat 路由增强 · 3X-UI 后台 · 多节点 · 订阅/二维码 · 域名伪装
+> xray reality docker 镜像前置 · BBR 内核优化 · v2ray-rules-dat 路由增强 · 3X-UI 后台 · 多节点 · 订阅/二维码 · 域名伪装 · 主从集群子命令
 
 一条命令在你的服务器上部署完整的 VLESS Reality 代理节点 + 3X-UI 管理面板：
 
@@ -14,8 +14,9 @@
 - **路由加强**：[Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat) 的 `geoip.dat` / `geosite.dat` 挂载进容器，配增强路由规则（广告拦截 `geosite:category-ads-all`、大陆直连 `geosite:cn`/`geoip:cn`、BT 拦截等），每周自动更新
 - **协议伪装**：使用 [SERVERNAMES_ZH.MD](https://github.com/wulabing/xray_docker/blob/master/reality/SERVERNAMES_ZH.MD) 已知可用站点列表作为 Reality DEST/SNI，支持域名 self-steal 模式（自动签发证书并托管伪装站点）
 - **3X-UI 后台**：[MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) Docker 部署，多节点管理、订阅链接、二维码、流量统计
-- **多节点**：`add-node` 一条命令添加更多 Reality 节点（自动生成新 UUID/密钥，互不干扰）
-- **订阅**：终端内 UTF8 二维码 + vless 链接 + 3X-UI 订阅链接，汇总文件 `subscription.txt`
+- **本机多前置节点**：`add-node` 再起一个 Reality **容器**（与 3X-UI 面板入站不是同一套）
+- **多机主从**：`cluster-token` / `cluster-add-node` / `cluster-share` 调 3X-UI API，少一次手工点面板
+- **订阅**：终端内 UTF8 二维码 + vless 链接 + 3X-UI 订阅链接；`sub-server` 带随机路径令牌
 
 ---
 
@@ -49,13 +50,30 @@ sudo bash install.sh update-rules        # 立即更新 v2ray-rules-dat 并重�
 sudo bash install.sh info                # 查看所有节点配置/订阅/二维码
 sudo bash install.sh xui-port 8388       # 3X-UI 面板内新增入站后开放端口
 sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 密码  # 面板 HTTPS 反代
-sudo bash install.sh sub-server          # 节点订阅 HTTP 服务 (HTTP 分享节点链接)
+sudo bash install.sh sub-server          # 节点订阅 HTTP 服务 (随机路径令牌)
+sudo bash install.sh cluster-token       # 子节点: 签发 node-sync Token
+sudo bash install.sh cluster-add-node --node-name sg --node-address 1.2.3.4 --node-path /xui-xxxx --node-token TOKEN
 sudo bash install.sh uninstall           # 卸载
 ```
 
+> 只下载 `install.sh` 再 `curl | bash` 时，脚本会自动拉取同版本的 `lib/` 与 `conf/`。离线环境请 `git clone` 完整仓库。
+
 ## 多服务器架构（主面板管理多节点）
 
-适合"一台主节点面板 + 多台远程节点"的部署（如 日本主 + 韩国/新加坡 节点）。利用 3X-UI 的**主从节点系统**（master 面板通过 API Token 连接子节点面板，同步入站、监控状态、提供订阅）：
+适合"一台主节点面板 + 多台远程节点"的部署（如 日本主 + 韩国/新加坡 节点）。利用 3X-UI 的**主从节点系统**（master 面板通过 API Token 连接子节点面板，同步入站、监控状态、提供订阅）。
+
+脚本已封装常用步骤（仍要求每台都安装完整 3X-UI）：
+
+```bash
+# 每台子节点上:
+sudo bash install.sh cluster-token --xui-user admin --xui-pass '你的面板密码'
+# 主节点上:
+sudo bash install.sh cluster-add-node \
+  --node-name kr --node-address kr.example.com --node-port 2053 \
+  --node-path /xui-xxxx --node-token '<上一步的 Token>' --allow-private
+# 每台（含主节点）面板入站上添加同一 UUID 的共享客户端:
+sudo bash install.sh cluster-share --share-uuid '<同一UUID>'
+```
 
 ```
   客户端订阅主面板地址 (http://主节点IP:2096/sub/<subid>)
@@ -197,16 +215,18 @@ sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 你的密码
   (多节点/订阅/二维码/统计)                                    + 自定入站端口
 ```
 
-- 路由规则文件 `geoip.dat` / `geosite.dat` 由 [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat) 发布，每日自动构建，本脚本每周三自动更新并重启节点
-- 增强路由规则（`conf/xray-config.template.json`）：广告域名拦截、内网直连、大陆域名/IP 直连、BT 拦截、SNI 分流
+- **两套节点**：左边 443 是 `install.sh` 拉起的 wulabing 容器；右边 2053 是 3X-UI 自己的 xray。面板里看不到 443 那个容器，要用 `install.sh info`。
+- 路由规则文件 `geoip.dat` / `geosite.dat` 由 [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat) 发布，本脚本每周三自动更新并重启节点
+- `geosite:cn` / `geoip:cn` → `direct` 是**服务端**出站：流量从这台 VPS 的公网 IP 出去（不是客户端“绕过代理”）。配合 `-P` 后置代理时，CN 流量不走家宽。
 - 伪装站点列表来自 [SERVERNAMES_ZH.MD](https://github.com/wulabing/xray_docker/blob/master/reality/SERVERNAMES_ZH.MD)
 
 ## 目录结构
 
 ```
 /opt/xray-oneclick/
-├── install.sh                  # 主脚本
-├── nodes.ini                   # 节点注册表
+├── install.sh                  # 入口 (加载 lib/)
+├── lib/                        # 按功能拆分的脚本模块
+├── nodes.ini                   # 前置节点注册表
 ├── subscription.txt            # 订阅链接汇总
 ├── conf/
 │   ├── xray-config.template.json   # 增强路由配置模板 (v2ray-rules-dat)
@@ -228,9 +248,11 @@ sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 你的密码
 sudo bash install.sh uninstall
 ```
 
-- 停止并删除所有节点容器与 3X-UI 容器
+- 停止并删除前置节点容器、3X-UI、`caddy-panel`、`sub-server`
 - 删除定时更新任务与内核优化配置
 - 可选择保留/删除数据目录与 Docker
+
+安全说明见 [SECURITY.md](SECURITY.md)。部署手册见 [docs/部署与使用手册.md](docs/部署与使用手册.md)。
 
 ## 常见问题
 

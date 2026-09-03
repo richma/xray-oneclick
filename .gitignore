@@ -8,6 +8,11 @@ subscription.txt
 conf/SERVERNAMES_ZH.MD
 /data/
 *.log
+.xui-cookies
+cluster-*.token
+cluster-share.txt
+sub-server.token
+/sub-www/
 
 # ============ 系统 / 编辑器 ============
 .DS_Store

@@ -73,7 +73,7 @@
         "network": "raw",
         "security": "reality",
         "realitySettings": {
-          "show": true,
+          "show": false,
           "target": "xx",
           "xver": 0,
           "maxTimeDiff": 0,
