@@ -1,16 +1,26 @@
 name: 发布 Release
 
+# 自动发版:
+#   - 推送到 main, 且 install.sh 的 VERSION 还没有对应 GitHub Release → 打 tag 并上传完整包
+#   - 手动推送 v* tag → 按该 tag 发版
+#   - Actions 里 Run workflow 也可补发
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: 校验并发布 v* Tag
+    name: 打包并发布
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码 (完整历史, 用于生成变更记录)
@@ -18,17 +28,50 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: 解析版本并判断是否需要发版
+        id: meta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(sed -n 's/^VERSION="\([^"]*\)"/\1/p' install.sh | head -1)"
+          fi
+          [ -n "$VERSION" ] || { echo "无法解析 VERSION"; exit 1; }
+          TAG="v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在, 跳过"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "将发布 $TAG"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 发布前校验
+        if: steps.meta.outputs.skip != 'true'
         run: |
           bash -n install.sh
+          bash -n scripts/pack-release.sh
           for f in lib/*.sh; do bash -n "$f"; done
           python3 -m json.tool conf/xray-config.template.json > /dev/null
-          echo "OK: 发布前校验通过 (tag: ${{ github.ref_name }})"
+          echo "OK: 发布前校验通过 (tag: ${{ steps.meta.outputs.tag }})"
+
+      - name: 打包完整发布物
+        if: steps.meta.outputs.skip != 'true'
+        run: |
+          bash scripts/pack-release.sh "${{ steps.meta.outputs.version }}"
+          ls -l dist/
+          tar -tzf "dist/xray-oneclick-v${{ steps.meta.outputs.version }}.tar.gz" | head
 
       - name: 生成发布说明
-        id: notes
+        if: steps.meta.outputs.skip != 'true'
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          TAG="${{ steps.meta.outputs.tag }}"
           {
             echo "## Xray Reality + 3X-UI 一键安装脚本 v${VERSION}"
             echo ""
@@ -37,34 +80,57 @@ jobs:
             echo "- 🗺️ v2ray-rules-dat (Loyalsoldier) 路由规则加强, 每周自动更新"
             echo "- 🎭 SERVERNAMES_ZH.MD 伪装站点 + 域名 self-steal 模式"
             echo "- 🖥️ 集成 3X-UI 面板 (多节点/订阅/二维码/统计)"
-            echo "- 🔗 多节点 add-node, 订阅汇总 subscription.txt"
+            echo "- 🔗 本机 add-node / 多机 cluster-* 主从"
+            echo "- 📦 完整包含 install.sh + lib/ + conf/ (可离线安装)"
             echo ""
             echo "### 快速开始"
             echo '```bash'
-            echo "curl -fsSL -o install.sh https://raw.githubusercontent.com/richma/xray-oneclick/${GITHUB_REF_NAME}/install.sh"
+            echo "curl -fsSL -o xray-oneclick.tar.gz https://github.com/${{ github.repository }}/releases/latest/download/xray-oneclick.tar.gz"
+            echo "tar -xzf xray-oneclick.tar.gz && cd xray-oneclick"
+            echo "sudo bash install.sh -y"
+            echo '```'
+            echo ""
+            echo "或只下入口脚本 (会自动拉取同版本 lib/):"
+            echo '```bash'
+            echo "curl -fsSL -o install.sh https://raw.githubusercontent.com/${{ github.repository }}/${TAG}/install.sh"
             echo "sudo bash install.sh -y"
             echo '```'
             echo ""
             echo "### 变更记录"
             echo '```'
-            PREV=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || true)
-            if [ -n "$PREV" ]; then
-              git log --oneline --no-decorate "$PREV..${{ github.ref_name }}"
+            PREV="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+            if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ]; then
+              git log --oneline --no-decorate "${PREV}..HEAD"
             else
-              git log --oneline --no-decorate -10
+              git log --oneline --no-decorate -15
             fi
             echo '```'
           } > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
 
       - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
-          files: |
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          VER="${{ steps.meta.outputs.version }}"
+          ARGS=(release create "$TAG"
+            --repo "${{ github.repository }}"
+            --title "$TAG"
+            --notes-file RELEASE_NOTES.md
+          )
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            ARGS+=(--target "${GITHUB_SHA}")
+          fi
+          ARGS+=(
+            "dist/xray-oneclick-v${VER}.tar.gz"
+            dist/xray-oneclick.tar.gz
+            dist/SHA256SUMS
             install.sh
             conf/xray-config.template.json
             conf/sysctl-xray.conf
-          fail_on_unmatched_files: true
+          )
+          gh "${ARGS[@]}"
+          echo "已发布 https://github.com/${{ github.repository }}/releases/tag/$TAG"

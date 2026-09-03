@@ -23,12 +23,18 @@
 ## 快速开始
 
 ```bash
-# 推荐: 下载后执行 (之后可用 bash install.sh info / add-node 等子命令)
+# 推荐: 下载 Release 完整包 (含 lib/ conf/, 可离线)
+curl -fsSL -o xray-oneclick.tar.gz \
+  https://github.com/richma/xray-oneclick/releases/latest/download/xray-oneclick.tar.gz
+tar -xzf xray-oneclick.tar.gz && cd xray-oneclick
+sudo bash install.sh -y
+
+# 或只下入口脚本 (会自动拉取同版本 lib/)
 curl -fsSL -o install.sh https://raw.githubusercontent.com/richma/xray-oneclick/main/install.sh
 chmod +x install.sh
-sudo bash install.sh -y          # 全自动安装 (默认参数)
+sudo bash install.sh -y
 
-# 或一行管道执行 (仅完成安装, 后续子命令请使用上面的方式)
+# 或一行管道执行 (仅完成安装, 后续子命令请用 /opt/xray-oneclick/install.sh)
 bash <(curl -fsSL https://raw.githubusercontent.com/richma/xray-oneclick/main/install.sh) -y
 ```
 
@@ -241,6 +247,16 @@ sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 你的密码
     ├── db/ cert/ acme/             # 面板数据/证书
     └── info.txt                    # 面板地址与账号信息
 ```
+
+## 自动发版
+
+推送到 `main` 且 `install.sh` 里的 `VERSION` 还没有对应 Release 时，GitHub Actions 会自动：
+
+1. 校验脚本 / JSON
+2. 打包 `install.sh` + `lib/` + `conf/` 为 `xray-oneclick-vX.Y.Z.tar.gz`
+3. 创建 git tag `vX.Y.Z` 并发布 [GitHub Release](https://github.com/richma/xray-oneclick/releases)（另附固定文件名 `xray-oneclick.tar.gz` 供 `latest/download`）
+
+也可在 Actions 里手动 **Run workflow**，或 `git tag vX.Y.Z && git push origin vX.Y.Z`。
 
 ## 卸载
 

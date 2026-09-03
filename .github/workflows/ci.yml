@@ -21,6 +21,7 @@ jobs:
         run: |
           bash -n install.sh
           bash -n test/unit-test.sh
+          bash -n scripts/pack-release.sh
           for f in lib/*.sh; do bash -n "$f"; done
 
       - name: JSON 配置校验
