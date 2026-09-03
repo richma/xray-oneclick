@@ -79,14 +79,14 @@ sudo bash install.sh cluster-share --share-uuid '<同一UUID>'
   客户端订阅主面板地址 (http://主节点IP:2096/sub/<subid>)
                         │
                  ┌──────▼──────┐
-                 │  主节点面板    │  3X-UI 主从节点系统
-                 │  (master)    │
-                 └──┬────────┬──┘
+                 │  主节点面板  │  3X-UI 主从节点系统
+                 │  (master)   │
+                 └──┬───────┬──┘
           API Token│        │API Token
-             ┌─────▼───┐  ┌─▼─────┐
-             │ 子节点面板  │  │ 子节点面板 │   各节点独立 3x-ui
-             │ (SG/韩国) │  │ (…)    │
-             └──────────┘  └────────┘
+             ┌─────▼─────┐  ┌─────▼─────┐
+             │ 子节点面板 │  │ 子节点面板 │   各节点独立 3x-ui
+             │ (SG/韩国) │  │     (…)   │
+             └───────────┘  └───────────┘
 ```
 
 **部署步骤：**
@@ -200,17 +200,17 @@ sudo bash install.sh panel-proxy -d panel.example.com --panel-pass 你的密码
 ## 架构说明
 
 ```
-                          ┌─────────────────────────────┐
+                          ┌───────────────────────────────┐
   客户端 vless://... ────► │  wulabing/xray_docker_reality │  端口 443
-   (Reality TLS 握手)     │  ┌─────────────────────────┐  │
-                          │  │ dokodemo-door(SNI嗅探) │  │
-                          │  │   ├─ 匹配 SNI → vless-in│  │  VLESS Reality
-                          │  │   └─ 不匹配  → blocked │  │  (tcp/vision | xhttp)
+   (Reality TLS 握手)     │  ┌──────────────────────────┐  │
+                          │  │ dokodemo-door(SNI嗅探)   │  │
+                          │  │   ├─ 匹配 SNI → vless-in │  │  VLESS Reality
+                          │  │   └─ 不匹配  → blocked   │  │  (tcp/vision | xhttp)
                           │  └─────────────────────────┘  │
                           │  Caddy (可选 self-steal 站点)  │  端口 80/8443
                           │  路由: v2ray-rules-dat 规则    │
-                          └──────────────┬──────────────┘
-                                         │
+                          └────────────────┬──────────────┘
+                                           │
   管理面板 ─────────────────────────► 3X-UI (Docker)        端口 2053
   (多节点/订阅/二维码/统计)                                    + 自定入站端口
 ```
