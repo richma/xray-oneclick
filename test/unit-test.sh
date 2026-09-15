@@ -191,6 +191,30 @@ else
   grep -q "用法" /tmp/xo-cli2.err; chk $? "xui-port 无端口提示用法"
 fi
 
+echo "===== 14. update-rules 重启范围 (含 3X-UI 面板) ====="
+if [ "$(id -u)" = 0 ]; then
+  RESTART_LOG=/tmp/xo-test/restart.log
+  mkdir -p "$INSTALL_DIR/nodes/node_443"
+  printf '443|xray_reality|tcp|%s/nodes/node_443|\n' "$INSTALL_DIR" > "$NODES_FILE"
+  download_rules() { :; }   # 跳过网络下载, 只验证重启范围
+  docker() {                # 屏蔽真实 docker, 用 FAKE_RUNNING 模拟运行中的容器
+    case "$1" in
+      ps)      printf '%s\n' "${FAKE_RUNNING:-}" ;;
+      restart) echo "$2" >> "$RESTART_LOG" ;;
+    esac
+  }
+  ur() { : > "$RESTART_LOG"; cmd_update_rules >/dev/null 2>&1; }
+
+  FAKE_RUNNING=$'xray_reality\n3x-ui'; ur
+  grep -qx xray_reality "$RESTART_LOG"; chk $? "update-rules 重启 Reality 容器"
+  grep -qx 3x-ui "$RESTART_LOG"; chk $? "update-rules 一并重启 3X-UI 面板 (面板同样消费规则)"
+
+  FAKE_RUNNING='xray_reality'; ur
+  if grep -qx 3x-ui "$RESTART_LOG"; then chk 1 "面板未运行时不重启面板"; else chk 0 "面板未运行时不重启面板"; fi
+else
+  echo "SKIP: 非 root, 跳过 update-rules 重启范围测试"
+fi
+
 echo ""
 echo "===== 单元测试结果: PASS=$PASS FAIL=$FAIL ====="
 exit $FAIL
