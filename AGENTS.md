@@ -1,17 +1,17 @@
 ## Agent skills
 
-### Issue tracker
+### Issue 跟踪
 
-Issues live in this repo's GitHub Issues (`gh` CLI). See `docs/agents/issue-tracker.md`.
+Issue 存放在本仓库的 GitHub Issues（用 `gh` CLI）。见 `docs/agents/issue-tracker.md`。
 
-### Triage labels
+### Triage 标签
 
-Canonical roles use the default strings: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+规范角色沿用默认字符串：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。见 `docs/agents/triage-labels.md`。
 
-### Domain docs
+### 领域文档
 
-Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+单上下文（single-context）：根目录 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
 
-### Coding standards
+### 编码规则
 
-Read `CODING_STANDARDS.md` before changing shell code or reviewing a diff: it records the `lib/` module conventions, and review findings cite its rule numbers.
+改 shell 代码或审查 diff 前先读 `CODING_STANDARDS.md`：它记录了 `lib/` 模块的约定，review 结论引用其规则编号。
