@@ -1,3 +1,4 @@
+# 基础目录与仓库文件落位 (幂等, 只补缺失)
 ensure_base_files() {
   mkdir -p "$INSTALL_DIR/conf" "$INSTALL_DIR/rules" "$INSTALL_DIR/nodes" \
            "$INSTALL_DIR/3x-ui/db" "$INSTALL_DIR/3x-ui/cert" "$INSTALL_DIR/3x-ui/acme" \

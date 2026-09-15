@@ -1,3 +1,4 @@
+# 环境检测: root / 系统 / 架构 / 虚拟化 / 网络连通性
 check_root() {
   [ "$(id -u)" = 0 ] || die "请以 root 权限运行: sudo bash install.sh"
 }

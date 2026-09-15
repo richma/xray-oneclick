@@ -1,3 +1,4 @@
+# 伪装站点列表 (SERVERNAMES_ZH.MD) 获取、解析与选择
 fetch_servernames() {
   mkdir -p "$INSTALL_DIR/conf"
   if [ ! -s "$SERVERNAMES_FILE" ]; then

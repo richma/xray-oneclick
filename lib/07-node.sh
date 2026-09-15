@@ -1,3 +1,4 @@
+# Reality 节点: 注册表 / 端口 / 容器 / 状态解析 / vless 链接与订阅
 save_node() {
   local port="$1" container="$2" network="$3" data_dir="$4" domain="${5:-}"
   touch "$NODES_FILE"

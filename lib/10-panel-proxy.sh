@@ -1,3 +1,4 @@
+# 面板 HTTPS 反向代理: Caddyfile 生成与 cmd_panel_proxy
 gen_panel_caddyfile() {
   local out="$1" dom="$2" pport="$3" wport="$4" gw="$5" pass="${6:-}"
   {

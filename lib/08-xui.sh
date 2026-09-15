@@ -1,3 +1,4 @@
+# 3X-UI 面板: 运行脚本生成、端口发布、面板路径解析、安装
 # 在 3x-ui/run.sh 的 PORTS=(...) 闭合括号前插入一行端口映射 (真正换行, 不用 sed \\n)
 xui_insert_port_mapping() {
   local file="$1" port="$2"
@@ -113,7 +114,7 @@ EOF
   ok "3X-UI 面板安装完成"
 }
 
-xui_port() {
+cmd_xui_port() {
   local xuidir="$INSTALL_DIR/3x-ui"
   [ -f "$xuidir/run.sh" ] || die "3X-UI 未安装 ($xuidir/run.sh 不存在)"
   local port added=0

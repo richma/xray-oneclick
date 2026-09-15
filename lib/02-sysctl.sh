@@ -1,3 +1,4 @@
+# 内核网络优化: sysctl 参数写入与 BBR
 apply_sysctl() {
   [ "${ENABLE_BBR:-1}" = 0 ] && { info "已跳过 BBR 与内核优化"; return 0; }
   mkdir -p "$INSTALL_DIR/conf"

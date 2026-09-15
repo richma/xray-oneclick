@@ -1,3 +1,4 @@
+# 防火墙: ufw / firewalld / iptables 放行, iptables 持久化, 卸载容器清单
 persist_iptables() {
   if command -v netfilter-persistent >/dev/null 2>&1; then
     netfilter-persistent save >/dev/null 2>&1 || true

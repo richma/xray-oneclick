@@ -216,7 +216,7 @@ case "$CMD" in
   info) cmd_info ;;
   xui-port)
     [ "${#XUI_PORTS[@]}" -gt 0 ] || die "用法: bash install.sh xui-port <端口> [更多端口]"
-    xui_port "${XUI_PORTS[@]}"
+    cmd_xui_port "${XUI_PORTS[@]}"
     ;;
   panel-proxy) cmd_panel_proxy ;;
   sub-server) cmd_sub_server ;;

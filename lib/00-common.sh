@@ -53,6 +53,8 @@ raw_urls() {
 }
 
 # GitHub Release / 任意 github.com URL 的镜像候选 (官方优先, 随后代理)
+# 与 raw_urls 相似但**不要合并**: gitmirror 代理不了 releases/download/, 而 raw 链接
+# 必须换成 host/owner/repo/... 形式。两者编码的是不同的外部约束, 合并会把约束藏起来。
 github_release_urls() {
   local url="$1"
   echo "$url"

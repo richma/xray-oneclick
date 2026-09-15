@@ -100,7 +100,7 @@ menu() {
       6) cmd_add_node; read -r -p "按回车返回菜单 ..." _ ;;
       7) cmd_update_rules; read -r -p "按回车返回菜单 ..." _ ;;
       8) cmd_info; read -r -p "按回车返回菜单 ..." _ ;;
-      9) ask "请输入要开放的端口" ""; xui_port $ANSWER; read -r -p "按回车返回菜单 ..." _ ;;
+      9) ask "请输入要开放的端口" ""; cmd_xui_port $ANSWER; read -r -p "按回车返回菜单 ..." _ ;;
       10) ask "请输入面板域名" ""; DOMAIN_ARG="$ANSWER"
           cmd_panel_proxy; read -r -p "按回车返回菜单 ..." _ ;;
       11) cmd_sub_server; read -r -p "按回车返回菜单 ..." _ ;;

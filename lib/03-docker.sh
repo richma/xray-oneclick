@@ -1,3 +1,4 @@
+# Docker 安装、镜像加速 (daemon.json 合并) 与镜像拉取
 install_docker() {
   [ "${INSTALL_DOCKER:-1}" = 0 ] && { info "已跳过 Docker 安装"; return 0; }
   if command -v docker >/dev/null 2>&1; then

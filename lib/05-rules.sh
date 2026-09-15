@@ -1,3 +1,4 @@
+# v2ray-rules-dat 规则下载 (sha256 校验) 与每周 cron
 download_rules() {
   [ "${INSTALL_RULES:-1}" = 0 ] && { warn "已跳过 v2ray-rules-dat 下载"; return 0; }
   mkdir -p "$RULES_DIR"

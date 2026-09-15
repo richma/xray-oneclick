@@ -22,6 +22,7 @@ echo "===== 0. 模块加载 ====="
 [ -n "$(type -t gen_uuid)" ]; chk $? "gen_uuid 已加载"
 [ -n "$(type -t cluster_node_body)" ]; chk $? "cluster_node_body 已加载"
 [ -n "$(type -t xui_insert_port_mapping)" ]; chk $? "xui_insert_port_mapping 已加载"
+[ -n "$(type -t cmd_xui_port)" ]; chk $? "cmd_xui_port 已加载 (子命令入口带 cmd_ 前缀)"
 [ "$VERSION" = "1.1.0" ]; chk $? "VERSION=1.1.0"
 
 echo "===== 1. 配置模板生成 ====="
@@ -123,7 +124,7 @@ sys.exit(0)
 PY
 chk $? "合并 daemon.json 保留 bip 并写入 mirrors"
 
-echo "===== 10. xui_port 换行插入 ====="
+echo "===== 10. cmd_xui_port 端口映射换行插入 ====="
 cat > /tmp/xo-run.sh <<'EOF'
 PORTS=(
   -p 2053:2053

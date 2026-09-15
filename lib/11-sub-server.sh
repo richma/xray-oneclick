@@ -1,3 +1,4 @@
+# 节点订阅 HTTP 服务: 路径令牌与 cmd_sub_server
 # 生成订阅服务的 URL 路径片段 (不含开头 /)
 sub_server_token_path() {
   local token="${1:-}"
