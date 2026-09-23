@@ -130,13 +130,15 @@ sudo bash install.sh cluster-share --share-uuid '<同一UUID>'
 | `--panel-port <端口>` | 面板 HTTPS 反代端口（配合 `panel-proxy`） | `9443` |
 | `--panel-pass <密码>` | 面板 HTTPS 反代登录密码（可选，配合 `panel-proxy`） | 无 |
 | `--sub-port <端口>` | 节点订阅 HTTP 服务端口（配合 `sub-server`） | `8080` |
+| `--xui-user <用户>` | 3X-UI 登录用户（`install` 写入面板；`cluster-token` 登录用） | `admin` |
+| `--xui-pass <密码>` | 3X-UI 登录密码（同上） | `admin` |
 | `-x, --no-3xui` | 不安装 3X-UI 面板 | 装 |
 | `-b, --no-bbr` | 跳过 BBR 与内核优化 | 不跳 |
 | `-c, --no-docker` | 跳过 Docker 安装 | 不跳 |
 | `-r, --no-rules` | 跳过 v2ray-rules-dat 下载 | 不跳 |
-| `-m, --mirror` | 使用国内镜像（Docker 安装/镜像拉取/GitHub 下载） | 关 |
+| `-m, --mirror` | 国内加速：配置 Docker 安装脚本镜像与 `daemon.json` registry-mirrors；GitHub/ghcr 代理在拉取失败时**始终**作为回退，不依赖本开关 | 关 |
 
-环境变量：`INSTALL_DIR`（默认 `/opt/xray-oneclick`）、`REALITY_IMAGE`、`XUI_IMAGE`、`XUI_PORT`（默认 `2053`）、`SHORTIDS`、`MIN_CLIENT_VER`、`PANEL_PROXY_PORT`、`PANEL_PROXY_PASS`、`SUB_SERVER_PORT`。
+环境变量：`INSTALL_DIR`（默认 `/opt/xray-oneclick`）、`REALITY_IMAGE`、`XUI_IMAGE`、`XUI_PORT`（默认 `2053`）、`XUI_USER` / `XUI_PASS`、`SHORTIDS`、`MIN_CLIENT_VER`、`PANEL_PROXY_PORT`、`PANEL_PROXY_PASS`、`SUB_SERVER_PORT`、`NODE_EXTRA_PORTS`（空格分隔，一律 `host:container`；裸端口如 `9443` 会扩成 `9443:9443`）。
 
 ## 安装后
 
@@ -285,7 +287,7 @@ sudo bash install.sh -p 8443     # 换一个端口重新安装
 
 **Q: 网络受限无法拉取镜像？**
 ```bash
-sudo bash install.sh -m          # 使用国内镜像 (docker 镜像加速 + ghcr 镜像 + GitHub 代理)
+sudo bash install.sh -m          # 配置 Docker 安装/daemon.json 国内镜像 (GitHub/ghcr 失败时本就会回退代理)
 ```
 
 **Q: 3X-UI 面板打不开？**
