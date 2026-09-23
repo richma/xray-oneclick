@@ -7,7 +7,7 @@ gen_panel_caddyfile() {
     echo "	key_type p256"
     echo "}"
     echo ""
-    echo "\$DOMAIN:8443 {"
+    echo "$dom:8443 {"
     echo "	tls {"
     echo "		issuer acme {"
     echo "			disable_tlsalpn_challenge"
@@ -36,6 +36,10 @@ gen_panel_caddyfile() {
     echo "	reverse_proxy $gw:$wport"
     echo "}"
   } > "$out"
+  # 含 basic_auth 哈希时限制权限 (CODING_STANDARDS §6.4)
+  if [ -n "$pass" ]; then
+    chmod 600 "$out" 2>/dev/null || true
+  fi
 }
 
 cmd_panel_proxy() {
@@ -98,6 +102,9 @@ cmd_panel_proxy() {
     echo "    reverse_proxy 127.0.0.1:$XUI_PORT"
     echo "}"
   } > "$xuidir/caddy/Caddyfile"
+  if [ -n "$PANEL_PROXY_PASS" ]; then
+    chmod 600 "$xuidir/caddy/Caddyfile" 2>/dev/null || true
+  fi
   ok "Caddyfile 已生成: $xuidir/caddy/Caddyfile"
 
   info "拉取 Caddy 镜像 ..."
