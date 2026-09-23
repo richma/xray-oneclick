@@ -31,8 +31,8 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   --panel-pass <密码>  面板 HTTPS 反代登录密码
   --sub-port <端口>    订阅 HTTP 服务端口 (默认 8080)
   --sub-token <令牌>   订阅 URL 路径令牌 (默认随机)
-  --xui-user <用户>    面板登录用户 (默认 admin)
-  --xui-pass <密码>    面板登录密码 (默认 admin)
+  --xui-user <用户>    面板登录用户 (install 与 cluster-token; 默认 admin)
+  --xui-pass <密码>    面板登录密码 (install 与 cluster-token; 默认 admin)
   --xui-token <Token>  面板 Bearer Token (优先于用户名密码)
   --node-name <名称>   cluster-add-node: 子节点名称
   --node-address <主机> cluster-add-node: 子节点地址
@@ -52,7 +52,8 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   -b, --no-bbr         跳过 BBR 与内核优化
   -c, --no-docker      跳过 Docker 安装 (已安装时)
   -r, --no-rules       跳过 v2ray-rules-dat 下载
-  -m, --mirror         使用国内镜像加速 (docker/ghcr/github)
+  -m, --mirror         国内加速: Docker 安装(get.docker.com)与 daemon.json 镜像;
+                       GitHub/ghcr 代理在拉取失败时始终作为回退, 不依赖本开关
   -h, --help           显示帮助
 EOF
 }
