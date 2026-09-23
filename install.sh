@@ -142,6 +142,8 @@ if [ -n "${XRAY_ONECLICK_SOURCE_ONLY:-}" ] && [ "${BASH_SOURCE[0]}" != "$0" ]; t
   return 0
 fi
 
+need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "选项 $1 需要参数"; }
+
 CMD="install"
 args=("$@")
 while [ $# -gt 0 ]; do
@@ -165,32 +167,32 @@ while [ $# -gt 0 ]; do
     cluster-status) CMD="cluster-status"; shift ;;
     uninstall) CMD="uninstall"; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
-    -p|--port) REALITY_PORT="$2"; shift 2 ;;
-    -n|--network) NETWORK_MODE="$2"; shift 2 ;;
-    -d|--domain) DOMAIN_ARG="$2"; shift 2 ;;
-    -e|--email) ACME_EMAIL_ARG="$2"; shift 2 ;;
-    -u|--uuid) UUID_ARG="$2"; shift 2 ;;
-    -P|--proxy) PROXY_ARG="$2"; shift 2 ;;
-    --panel-port) PANEL_PROXY_PORT="$2"; shift 2 ;;
-    --panel-pass) PANEL_PROXY_PASS="$2"; shift 2 ;;
-    --sub-port) SUB_SERVER_PORT="$2"; shift 2 ;;
-    --sub-token) SUB_SERVER_TOKEN="$2"; shift 2 ;;
-    --xui-user) XUI_USER="$2"; shift 2 ;;
-    --xui-pass) XUI_PASS="$2"; shift 2 ;;
-    --xui-token) XUI_TOKEN="$2"; shift 2 ;;
-    --node-name) NODE_NAME="$2"; shift 2 ;;
-    --node-address) NODE_ADDRESS="$2"; shift 2 ;;
-    --node-port) NODE_PORT="$2"; shift 2 ;;
-    --node-path) NODE_PATH="$2"; shift 2 ;;
-    --node-token) NODE_TOKEN="$2"; shift 2 ;;
-    --node-scheme) NODE_SCHEME="$2"; shift 2 ;;
-    --share-email) SHARE_EMAIL="$2"; shift 2 ;;
-    --share-subid) SHARE_SUBID="$2"; shift 2 ;;
-    --share-uuid) SHARE_UUID="$2"; shift 2 ;;
-    --host-inbound) HOST_INBOUND="$2"; shift 2 ;;
-    --host-addr) HOST_ADDR="$2"; shift 2 ;;
-    --host-remark) HOST_REMARK="$2"; shift 2 ;;
-    --host-sni) HOST_SNI="$2"; shift 2 ;;
+    -p|--port) need_val "$@"; REALITY_PORT="$2"; shift 2 ;;
+    -n|--network) need_val "$@"; NETWORK_MODE="$2"; shift 2 ;;
+    -d|--domain) need_val "$@"; DOMAIN_ARG="$2"; shift 2 ;;
+    -e|--email) need_val "$@"; ACME_EMAIL_ARG="$2"; shift 2 ;;
+    -u|--uuid) need_val "$@"; UUID_ARG="$2"; shift 2 ;;
+    -P|--proxy) need_val "$@"; PROXY_ARG="$2"; shift 2 ;;
+    --panel-port) need_val "$@"; PANEL_PROXY_PORT="$2"; shift 2 ;;
+    --panel-pass) need_val "$@"; PANEL_PROXY_PASS="$2"; shift 2 ;;
+    --sub-port) need_val "$@"; SUB_SERVER_PORT="$2"; shift 2 ;;
+    --sub-token) need_val "$@"; SUB_SERVER_TOKEN="$2"; shift 2 ;;
+    --xui-user) need_val "$@"; XUI_USER="$2"; shift 2 ;;
+    --xui-pass) need_val "$@"; XUI_PASS="$2"; shift 2 ;;
+    --xui-token) need_val "$@"; XUI_TOKEN="$2"; shift 2 ;;
+    --node-name) need_val "$@"; NODE_NAME="$2"; shift 2 ;;
+    --node-address) need_val "$@"; NODE_ADDRESS="$2"; shift 2 ;;
+    --node-port) need_val "$@"; NODE_PORT="$2"; shift 2 ;;
+    --node-path) need_val "$@"; NODE_PATH="$2"; shift 2 ;;
+    --node-token) need_val "$@"; NODE_TOKEN="$2"; shift 2 ;;
+    --node-scheme) need_val "$@"; NODE_SCHEME="$2"; shift 2 ;;
+    --share-email) need_val "$@"; SHARE_EMAIL="$2"; shift 2 ;;
+    --share-subid) need_val "$@"; SHARE_SUBID="$2"; shift 2 ;;
+    --share-uuid) need_val "$@"; SHARE_UUID="$2"; shift 2 ;;
+    --host-inbound) need_val "$@"; HOST_INBOUND="$2"; shift 2 ;;
+    --host-addr) need_val "$@"; HOST_ADDR="$2"; shift 2 ;;
+    --host-remark) need_val "$@"; HOST_REMARK="$2"; shift 2 ;;
+    --host-sni) need_val "$@"; HOST_SNI="$2"; shift 2 ;;
     --allow-private) NODE_ALLOW_PRIVATE=1; shift ;;
     --tls-verify) NODE_TLS_SKIP=0; shift ;;
     -x|--no-3xui) INSTALL_3XUI=0; shift ;;

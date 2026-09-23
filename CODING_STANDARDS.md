@@ -49,7 +49,7 @@
 - **6.1** 节点注册表只有 `nodes.ini` 一处，格式 `端口|容器名|网络|数据目录|域名`；增删走 `save_node` / `remove_node`，不要另起一份清单。
 - **6.2** 状态文件的格式与解析必须配对：`reality_config_info.txt` 是 `KEY: value`，读取一律走 `node_field`，不要另写一套解析。
 - **6.3** 覆盖已有文件用「写 `.tmp` → `mv`」保证原子性（`save_node`、`xui_insert_port_mapping`）；新文件可以直接 heredoc 写。
-- **6.4** 权限显式设置：生成的脚本 `chmod +x`；含密钥的文件 `umask 077` + `chmod 600`（`cmd_sub_server`、`cmd_cluster_share`）；对外订阅文件 `644`；cron `0644`。
+- **6.4** 权限显式设置：生成的脚本 `chmod +x`；含密钥的文件 `umask 077` + `chmod 600`（`cmd_sub_server`、`cmd_cluster_share`、内部 `$INSTALL_DIR/subscription.txt`、`nodes/*/data/reality_config_info.txt`、含 bcrypt 的 `Caddyfile`、`3x-ui/info.txt`）；**对外**订阅副本 `sub-www/<token>/subscription.txt` 用 `644`（HTTP 服务只读挂载）；cron `0644`。不要把内部汇总文件与公开订阅副本混为一谈。
 
 ## 7. 安全
 

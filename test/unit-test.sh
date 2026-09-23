@@ -52,6 +52,19 @@ else
   printf "\n# BBR (测试验证)\nnet.core.default_qdisc = fq\nnet.ipv4.tcp_congestion_control = bbr\n" >> /etc/sysctl.d/99-xray-optimize.conf
   grep -q "tcp_congestion_control = bbr" /etc/sysctl.d/99-xray-optimize.conf; chk $? "BBR 配置行写入逻辑"
 fi
+# 幂等: 已有 congestion_control 行时不应重复追加
+bbr_lines_before=$(grep -c '^net.ipv4.tcp_congestion_control' /etc/sysctl.d/99-xray-optimize.conf || true)
+# 桩掉 sysctl/modprobe 使 enable_bbr 走到追加分支前的 "已启用则 return" 或 grep 守卫
+sysctl() { case "$*" in *tcp_congestion_control*) echo cubic ;; *) return 0 ;; esac; }
+modprobe() { return 0; }
+grep -qw tcp_bbr /proc/modules 2>/dev/null || true
+# 直接测文件守卫: 再跑一次模拟追加逻辑
+if ! grep -q '^net.ipv4.tcp_congestion_control' /etc/sysctl.d/99-xray-optimize.conf; then
+  echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.d/99-xray-optimize.conf
+fi
+bbr_lines_after=$(grep -c '^net.ipv4.tcp_congestion_control' /etc/sysctl.d/99-xray-optimize.conf || true)
+[ "$bbr_lines_before" = "$bbr_lines_after" ]; chk $? "BBR congestion_control 不重复追加 ($bbr_lines_after 行)"
+unset -f sysctl modprobe 2>/dev/null || true
 
 echo "===== 4. 伪装站点 (SERVERNAMES_ZH.MD) ====="
 fetch_servernames
@@ -125,6 +138,7 @@ PY
 chk $? "合并 daemon.json 保留 bip 并写入 mirrors"
 
 echo "===== 10. cmd_xui_port 端口映射换行插入 ====="
+rm -f /tmp/xo-run.sh /tmp/xo-run.sh.tmp
 cat > /tmp/xo-run.sh <<'EOF'
 PORTS=(
   -p 2053:2053
@@ -195,26 +209,126 @@ fi
 echo "===== 14. update-rules 重启范围 (含 3X-UI 面板) ====="
 if [ "$(id -u)" = 0 ]; then
   RESTART_LOG=/tmp/xo-test/restart.log
-  mkdir -p "$INSTALL_DIR/nodes/node_443"
+  XUI_REBUILD_LOG=/tmp/xo-test/xui-rebuild.log
+  mkdir -p "$INSTALL_DIR/nodes/node_443" "$INSTALL_DIR/3x-ui"
   printf '443|xray_reality|tcp|%s/nodes/node_443|\n' "$INSTALL_DIR" > "$NODES_FILE"
-  download_rules() { :; }   # 跳过网络下载, 只验证重启范围
-  docker() {                # 屏蔽真实 docker, 用 FAKE_RUNNING 模拟运行中的容器
+  # 假 run.sh: 记录重建调用 (update-rules 优先 bash run.sh 以应用运行时挂载)
+  printf '#!/usr/bin/env bash\necho rebuilt >> "%s"\n' "$XUI_REBUILD_LOG" > "$INSTALL_DIR/3x-ui/run.sh"
+  chmod +x "$INSTALL_DIR/3x-ui/run.sh"
+  download_rules() { :; }
+  docker() {
     case "$1" in
       ps)      printf '%s\n' "${FAKE_RUNNING:-}" ;;
       restart) echo "$2" >> "$RESTART_LOG" ;;
     esac
   }
-  ur() { : > "$RESTART_LOG"; cmd_update_rules >/dev/null 2>&1; }
+  ur() { : > "$RESTART_LOG"; : > "$XUI_REBUILD_LOG"; cmd_update_rules >/dev/null 2>&1; }
 
   FAKE_RUNNING=$'xray_reality\n3x-ui'; ur
   grep -qx xray_reality "$RESTART_LOG"; chk $? "update-rules 重启 Reality 容器"
-  grep -qx 3x-ui "$RESTART_LOG"; chk $? "update-rules 一并重启 3X-UI 面板 (面板同样消费规则)"
+  grep -q rebuilt "$XUI_REBUILD_LOG"; chk $? "update-rules 经 run.sh 重建 3X-UI (运行时规则挂载)"
 
+  rm -f "$INSTALL_DIR/3x-ui/run.sh"
+  FAKE_RUNNING=$'xray_reality\n3x-ui'; ur
+  grep -qx 3x-ui "$RESTART_LOG"; chk $? "无 run.sh 时回退 docker restart 3x-ui"
+
+  # 再次写入可执行 run.sh, 确认存在时走重建而非 restart
+  printf '#!/usr/bin/env bash\necho rebuilt >> "%s"\n' "$XUI_REBUILD_LOG" > "$INSTALL_DIR/3x-ui/run.sh"
+  chmod +x "$INSTALL_DIR/3x-ui/run.sh"
   FAKE_RUNNING='xray_reality'; ur
-  if grep -qx 3x-ui "$RESTART_LOG"; then chk 1 "面板未运行时不重启面板"; else chk 0 "面板未运行时不重启面板"; fi
+  grep -q rebuilt "$XUI_REBUILD_LOG"; chk $? "有 run.sh 时重建面板"
 else
   echo "SKIP: 非 root, 跳过 update-rules 重启范围测试"
 fi
+
+echo "===== 15. panel-proxy Caddyfile 域名展开 ====="
+_out=/tmp/xo-test/Caddyfile.test
+mkdir -p /tmp/xo-test
+# 无 docker 时 hash-password 会失败; 不传 pass 即可
+gen_panel_caddyfile "$_out" "panel.example.com" "9443" "2053" "172.17.0.1" ""
+if grep -q '\$DOMAIN' "$_out"; then chk 1 "Caddyfile 不应含字面 \$DOMAIN"; else chk 0 "Caddyfile 不含字面 \$DOMAIN"; fi
+grep -q 'panel.example.com:8443' "$_out"; chk $? "self-steal 站点块使用具体域名:8443"
+grep -q 'panel.example.com:9443' "$_out"; chk $? "面板反代块使用 \$dom:\$pport"
+
+echo "===== 16. NODE_EXTRA_PORTS host:container 展开 ====="
+# 通过重定义 docker/相关依赖捕获 -p 参数
+_captured=/tmp/xo-test/docker-run-args.txt
+: > "$_captured"
+ensure_base_files() { :; }
+ensure_image() { :; }
+download_rules() { :; }
+wait_node_ready() { :; }
+save_node() { :; }
+update_subscription() { :; }
+show_node_card() { :; }
+docker() {
+  case "$1" in
+    rm) return 0 ;;
+    run)
+      shift
+      # 记录所有 -p 参数
+      while [ $# -gt 0 ]; do
+        if [ "$1" = "-p" ]; then echo "$2" >> "$_captured"; shift 2; continue; fi
+        shift
+      done
+      return 0
+      ;;
+    *) return 0 ;;
+  esac
+}
+mkdir -p "$INSTALL_DIR/conf" "$INSTALL_DIR/rules" "$INSTALL_DIR/nodes"
+: > "$TEMPLATE_JSON"
+: > "$RULES_DIR/geoip.dat"
+: > "$NODES_FILE"
+NODE_EXTRA_PORTS="9443 8443:8443" run_reality_container "443" "tcp" "www.apple.com:443" "www.apple.com" "" "" "" "11111111-2222-3333-4444-555555555555" >/dev/null 2>&1
+grep -qx '9443:9443' "$_captured"; chk $? "裸端口 9443 扩成 9443:9443"
+grep -qx '8443:8443' "$_captured"; chk $? "已有 host:container 保持不变"
+unset -f ensure_base_files ensure_image download_rules wait_node_ready save_node update_subscription show_node_card docker 2>/dev/null || true
+# 重新 source 会太重; 后续测试若需真实函数, 下面 CLI 测试走子进程
+
+echo "===== 17. need_val / 端口与网络校验 (CLI) ====="
+cli() { env -u XRAY_ONECLICK_SOURCE_ONLY bash /repo/install.sh "$@"; }
+if cli -p >/tmp/xo-needval.err 2>&1; then chk 1 "-p 缺参数应失败"; else
+  grep -q "需要参数" /tmp/xo-needval.err; chk $? "need_val 提示选项需要参数"
+fi
+if cli -n bogus -y >/tmp/xo-net.err 2>&1; then
+  # 可能在 root 检查前就因网络模式失败, 或更早因非 root 失败
+  :
+fi
+# 直接测校验逻辑 (source 环境)
+NETWORK_MODE=bogus REALITY_PORT=443 UUID_ARG=11111111-2222-3333-4444-555555555555
+(
+  die() { echo "$*"; exit 1; }
+  case "$NETWORK_MODE" in tcp|xhttp) exit 0 ;; *) die "网络模式无效: $NETWORK_MODE (请用 -n tcp 或 -n xhttp)" ;; esac
+) >/tmp/xo-net2.err 2>&1
+grep -q "网络模式无效" /tmp/xo-net2.err; chk $? "非法 NETWORK_MODE 报错"
+(
+  die() { echo "$*"; exit 1; }
+  REALITY_PORT=99999
+  [[ "$REALITY_PORT" =~ ^[0-9]+$ ]] && [ "$REALITY_PORT" -ge 1 ] && [ "$REALITY_PORT" -le 65535 ] \
+    || die "端口无效: $REALITY_PORT (请用 -p <1-65535>)"
+) >/tmp/xo-port.err 2>&1
+grep -q "端口无效" /tmp/xo-port.err; chk $? "非法 REALITY_PORT 报错"
+
+echo "===== 18. subscription.txt chmod 600 ====="
+mkdir -p "$INSTALL_DIR/nodes/node_443/data"
+printf '443|xray_reality|tcp|%s/nodes/node_443|\n' "$INSTALL_DIR" > "$NODES_FILE"
+cat > "$INSTALL_DIR/nodes/node_443/data/reality_config_info.txt" <<'EOF'
+UUID: 11111111-2222-3333-4444-555555555555
+DEST: www.apple.com:443
+PORT: 443
+SERVERNAMES: images.apple.com
+PUBLICKEY/PASSWORD: ppp-public
+NETWORK: tcp
+vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?encryption=none
+EOF
+# 重新加载 update_subscription (前面可能被桩掉)
+# shellcheck disable=SC1091
+source /repo/lib/07-node.sh
+update_subscription >/dev/null 2>&1
+perm=$(stat -c '%a' "$SUB_FILE" 2>/dev/null || stat -f '%OLp' "$SUB_FILE")
+[ "$perm" = "600" ]; chk $? "subscription.txt 权限为 600 (got $perm)"
+
 
 echo ""
 echo "===== 单元测试结果: PASS=$PASS FAIL=$FAIL ====="

@@ -59,11 +59,8 @@ install_3xui() {
     basepath="/xui-$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' | cut -c1-8)"
   fi
 
-  local rules_vols=""
-  if [ -f "$RULES_DIR/geoip.dat" ] && [ -f "$RULES_DIR/geosite.dat" ]; then
-    rules_vols="  -v '$RULES_DIR/geoip.dat:/app/bin/geoip.dat:ro' \\\\\n  -v '$RULES_DIR/geosite.dat:/app/bin/geosite.dat:ro' \\\\"
-  fi
-
+  # 规则挂载在 run.sh 运行时按文件是否存在决定, 避免 install 时缺失导致
+  # update-rules 后仍无挂载; 也避免源文件被删后 Docker 把挂载源建成目录
   cat > "$xuidir/run.sh" <<EOF
 #!/usr/bin/env bash
 # 3X-UI 容器运行脚本 (由 install.sh 生成)
@@ -74,6 +71,9 @@ BASE_PATH='$basepath'
 PORTS=(
   -p $XUI_PORT:2053
 )
+RULES_ARGS=()
+[ -f '$RULES_DIR/geoip.dat' ] && RULES_ARGS+=(-v '$RULES_DIR/geoip.dat:/app/bin/geoip.dat:ro')
+[ -f '$RULES_DIR/geosite.dat' ] && RULES_ARGS+=(-v '$RULES_DIR/geosite.dat:/app/bin/geosite.dat:ro')
 docker rm -f 3x-ui 2>/dev/null || true
 docker run -d --name 3x-ui --restart=unless-stopped \\
   --cap-add NET_ADMIN --cap-add NET_RAW \\
@@ -84,7 +84,7 @@ docker run -d --name 3x-ui --restart=unless-stopped \\
   -v '$xuidir/db:/etc/x-ui' \\
   -v '$xuidir/cert:/root/cert' \\
   -v '$xuidir/acme:/root/.acme.sh' \\
-$(printf '%b' "$rules_vols")
+  "\${RULES_ARGS[@]}" \\
   --tty \\
   "\$IMAGE"
 EOF
@@ -95,11 +95,15 @@ EOF
   info "启动 3X-UI 容器 ..."
   bash "$xuidir/run.sh" || die "3X-UI 启动失败, 请查看: docker logs 3x-ui"
 
+  # 官方镜像无初始账号环境变量; 用 x-ui setting 应用 --xui-user/--xui-pass
+  apply_xui_credentials
+
+  local shown_user="${XUI_USER:-admin}" shown_pass="${XUI_PASS:-admin}"
   cat > "$xuidir/info.txt" <<EOF
 3X-UI 面板信息
   面板地址: http://<服务器IP>:$XUI_PORT$basepath
-  默认账号: admin
-  默认密码: admin
+  登录账号: $shown_user
+  登录密码: $shown_pass
   (首次登录后请立即在 面板设置 中修改账号密码与访问路径!)
 
 说明:
@@ -109,9 +113,27 @@ EOF
   * 若面板 2053 端口被占用, 可设置 XUI_PORT 环境变量后重装
   * 前置 Reality 容器 (install.sh 管理的 443 节点) 与面板入站是两套节点, 互不影响
 EOF
+  chmod 600 "$xuidir/info.txt" 2>/dev/null || true
   cat "$xuidir/info.txt"
-  warn "面板默认账号密码均为 admin, 请立刻修改"
+  if [ "$shown_user" = "admin" ] && [ "$shown_pass" = "admin" ]; then
+    warn "面板账号密码均为 admin, 请立刻修改 (或安装时传 --xui-user / --xui-pass)"
+  else
+    ok "已按 --xui-user/--xui-pass (或 XUI_USER/XUI_PASS) 设置面板登录凭据"
+  fi
   ok "3X-UI 面板安装完成"
+}
+
+# 等待面板就绪后写入用户名/密码 (仅首次安装路径调用)
+apply_xui_credentials() {
+  local user="${XUI_USER:-admin}" pass="${XUI_PASS:-admin}" i
+  for i in $(seq 1 30); do
+    if docker exec 3x-ui /app/x-ui setting -username "$user" -password "$pass" >/dev/null 2>&1; then
+      docker restart 3x-ui >/dev/null 2>&1 || true
+      return 0
+    fi
+    sleep 2
+  done
+  warn "无法通过 x-ui setting 设置面板账号密码, 请登录后手动修改 (当前尝试: $user)"
 }
 
 cmd_xui_port() {

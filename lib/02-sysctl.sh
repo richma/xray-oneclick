@@ -62,12 +62,16 @@ enable_bbr() {
     warn "内核不支持 tcp_bbr 模块 (OpenVZ/LXC 或旧内核), 跳过 BBR"
     return 1
   fi
-  {
-    echo ""
-    echo "# BBR (由 install.sh 追加)"
-    echo "net.core.default_qdisc = fq"
-    echo "net.ipv4.tcp_congestion_control = bbr"
-  } >> "$SYSCTL_FILE"
+  if ! grep -q '^net.ipv4.tcp_congestion_control' "$SYSCTL_FILE" 2>/dev/null; then
+    {
+      echo ""
+      echo "# BBR (由 install.sh 追加)"
+      echo "net.core.default_qdisc = fq"
+      echo "net.ipv4.tcp_congestion_control = bbr"
+    } >> "$SYSCTL_FILE"
+  elif ! grep -q '^net.core.default_qdisc' "$SYSCTL_FILE" 2>/dev/null; then
+    echo "net.core.default_qdisc = fq" >> "$SYSCTL_FILE"
+  fi
   sysctl -p "$SYSCTL_FILE" >/dev/null 2>&1 || true
   if [ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" = "bbr" ]; then
     ok "BBR 已启用: 队列 fq + 拥塞控制 bbr"
