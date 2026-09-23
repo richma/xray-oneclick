@@ -96,11 +96,16 @@ WRAPPER_EOF
     info "挂载自定义 Caddyfile: $NODE_CADDYFILE"
     args+=(-v "$NODE_CADDYFILE:/etc/caddy/Caddyfile:ro")
   fi
+  # NODE_EXTRA_PORTS 约定一律 host:container; 裸端口数字自动扩成 $pp:$pp
   if [ -n "${NODE_EXTRA_PORTS:-}" ]; then
-    local pp
+    local pp mapped
     for pp in $NODE_EXTRA_PORTS; do
-      info "额外发布端口: $pp"
-      args+=(-p "$pp")
+      case "$pp" in
+        *:*) mapped="$pp" ;;
+        *)   mapped="$pp:$pp" ;;
+      esac
+      info "额外发布端口: $mapped"
+      args+=(-p "$mapped")
     done
   fi
 
@@ -119,7 +124,10 @@ WRAPPER_EOF
 wait_node_ready() {
   local name="$1" info_file="$2" i
   for i in $(seq 1 60); do
-    if [ -s "$info_file" ]; then return 0; fi
+    if [ -s "$info_file" ]; then
+      chmod 600 "$info_file" 2>/dev/null || true
+      return 0
+    fi
     if ! docker ps --filter "name=^/${name}$" --format '{{.Names}}' | grep -qx "$name"; then
       die "容器 $name 已退出, 请查看日志: docker logs $name"
     fi
@@ -185,7 +193,10 @@ update_subscription() {
       link="$(build_vless_link "$data_dir" "$ip")" && echo "$link" >> "$SUB_FILE"
     fi
   done < "$NODES_FILE"
-  [ -s "$SUB_FILE" ] && ok "订阅链接已汇总: $SUB_FILE"
+  if [ -s "$SUB_FILE" ]; then
+    chmod 600 "$SUB_FILE" 2>/dev/null || true
+    ok "订阅链接已汇总: $SUB_FILE"
+  fi
 }
 
 show_node_card() {
