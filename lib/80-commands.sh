@@ -64,6 +64,14 @@ cmd_install() {
     info "已生成 UUID: $UUID_ARG"
   fi
 
+  [[ "$REALITY_PORT" =~ ^[0-9]+$ ]] && [ "$REALITY_PORT" -ge 1 ] && [ "$REALITY_PORT" -le 65535 ] \
+    || die "端口无效: $REALITY_PORT (请用 -p <1-65535>)"
+  case "$NETWORK_MODE" in
+    tcp|xhttp) ;;
+    *) die "网络模式无效: $NETWORK_MODE (请用 -n tcp 或 -n xhttp)" ;;
+  esac
+  is_valid_uuid "$UUID_ARG" || die "UUID 无效: $UUID_ARG (请用 -u <标准 UUID>)"
+
   check_port_free "$REALITY_PORT"
   [ -n "${DOMAIN_ARG:-}" ] && check_port_free 80 "$(container_name_for "$REALITY_PORT")"
 
@@ -118,6 +126,8 @@ cmd_add_node() {
     REALITY_PORT="$ANSWER"
   fi
   port="$REALITY_PORT"
+  [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] \
+    || die "端口无效: $port (请用 -p <1-65535>)"
   check_port_free "$port"
 
   if [ -n "${DOMAIN_ARG:-}" ]; then
@@ -142,6 +152,12 @@ cmd_add_node() {
   fi
   [ -z "${UUID_ARG:-}" ] && UUID_ARG="$(gen_uuid)"
 
+  case "$NETWORK_MODE" in
+    tcp|xhttp) ;;
+    *) die "网络模式无效: $NETWORK_MODE (请用 -n tcp 或 -n xhttp)" ;;
+  esac
+  is_valid_uuid "$UUID_ARG" || die "UUID 无效: $UUID_ARG (请用 -u <标准 UUID>)"
+
   run_reality_container "$port" "$NETWORK_MODE" "$DEST" "$SERVERNAMES" \
     "$DOMAIN_ARG" "$ACME_EMAIL_ARG" "$PROXY_ARG" "$UUID_ARG"
   open_firewall "$port"
@@ -156,7 +172,11 @@ cmd_update_rules() {
   for c in $(node_containers); do
     docker restart "$c" >/dev/null 2>&1 && ok "已重启: $c" || warn "重启失败: $c"
   done
-  if docker ps --format '{{.Names}}' | grep -qx "3x-ui"; then
+  # 重建面板容器以按 run.sh 运行时检查重新挂载 geo 规则 (docker restart 不会补挂载)
+  local xui_run="$INSTALL_DIR/3x-ui/run.sh"
+  if [ -f "$xui_run" ]; then
+    bash "$xui_run" >/dev/null 2>&1 && ok "已重建: 3x-ui (应用规则挂载)" || warn "重建 3x-ui 失败"
+  elif docker ps --format '{{.Names}}' | grep -qx "3x-ui"; then
     docker restart 3x-ui >/dev/null 2>&1 && ok "已重启: 3x-ui" || warn "重启 3x-ui 失败"
   fi
   ok "v2ray-rules-dat 更新完成"
