@@ -33,6 +33,24 @@ check_port_free() {
   fi
 }
 
+# 回滚: 删除失败的新容器, 还原被覆盖的真值文件, 再把暂存的旧容器换回来
+restore_node_container() {
+  local had_old="$1" name="$2" old="$3" bak="$4" data_dir="$5" reason="$6" f
+  docker rm -f "$name" >/dev/null 2>&1 || true
+  if [ "$had_old" != 1 ]; then
+    die "$reason, 且没有可回滚的旧容器; 请查看: docker logs $name"
+  fi
+  for f in reality_state.json reality_config_info.txt; do
+    [ -f "$bak/$f" ] && cp -a "$bak/$f" "$data_dir/$f" 2>/dev/null || true
+  done
+  docker rename "$old" "$name" 2>/dev/null \
+    || die "$reason; 旧容器仍在 $old, 请手工恢复: docker rename $old $name && docker start $name"
+  docker start "$name" >/dev/null 2>&1 \
+    || die "$reason; 旧容器 $name 已换回但启动失败, 请查看: docker logs $name"
+  rm -rf "$bak"
+  die "$reason, 已回滚旧容器 $name (配置与密钥已还原); 请先排查失败原因再重试"
+}
+
 run_reality_container() {
   local port="$1" network="$2" dest="${3:-www.apple.com:443}" sn="${4:-images.apple.com www.apple.com}"
   local domain="${5:-}" email="${6:-}" proxy="${7:-}" uuid_opt="${8:-}"
@@ -114,32 +132,31 @@ WRAPPER_EOF
 
   # 旧容器先停+改名暂存: 新容器起不来时可以原样回滚, 不再"先删后建"
   local old="${name}.old" had_old=0
+  local data_dir="$node_dir/data" bak_dir="$node_dir/.rollback"
   docker rm -f "$old" >/dev/null 2>&1 || true
+  rm -rf "$bak_dir"; mkdir -p "$bak_dir"
   if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
     had_old=1
+    # 新容器会就地覆盖这两个真值文件, 回滚时必须还原, 否则旧容器的密钥与链接不一致
+    local f
+    for f in reality_state.json reality_config_info.txt; do
+      [ -f "$data_dir/$f" ] && cp -a "$data_dir/$f" "$bak_dir/$f"
+    done
     docker stop "$name" >/dev/null 2>&1 || true
     docker rename "$name" "$old" || die "无法暂存旧容器 $name, 已中止 (旧容器未改动)"
   fi
 
   info "启动 Reality 节点容器: $name (端口 $port / $network) ..."
   if ! docker run "${args[@]}"; then
-    if [ "$had_old" = 1 ]; then
-      docker rm -f "$name" >/dev/null 2>&1 || true
-      docker rename "$old" "$name" && docker start "$name" >/dev/null 2>&1 || true
-      die "容器启动失败, 已回滚旧容器 $name; 请查看: docker logs $name"
-    fi
-    die "容器启动失败, 请查看: docker logs $name"
+    restore_node_container "$had_old" "$name" "$old" "$bak_dir" "$data_dir" "容器启动失败"
   fi
 
   if ! wait_node_ready "$name" "$node_dir/data/reality_config_info.txt"; then
     docker rm -f "$name" >/dev/null 2>&1 || true
-    if [ "$had_old" = 1 ]; then
-      docker rename "$old" "$name" && docker start "$name" >/dev/null 2>&1 || true
-      die "新容器未就绪, 已回滚旧容器 $name; 请查看: docker logs $name"
-    fi
-    die "新容器未就绪, 请查看: docker logs $name"
+    restore_node_container "$had_old" "$name" "$old" "$bak_dir" "$data_dir" "新容器未就绪"
   fi
   [ "$had_old" = 1 ] && docker rm -f "$old" >/dev/null 2>&1 || true
+  rm -rf "$bak_dir"
   secure_node_secrets "$node_dir"
   save_node "$port" "$name" "$network" "$node_dir" "$domain"
   update_subscription
@@ -239,7 +256,13 @@ update_subscription() {
     local info_file="$data_dir/data/reality_config_info.txt"
     [ -f "$info_file" ] || continue
     if grep -q "vless://" "$info_file"; then
-      grep -o 'vless://[^#]*' "$info_file" | sort -u >> "$SUB_FILE"
+      # HIDE_SENSITIVE_INFO 下若链接被打码(含 *), 丢弃并回退到自行拼装
+      while IFS= read -r raw_link; do
+        case "$raw_link" in
+          *'*'*) continue ;;
+          *) printf '%s\n' "$raw_link" >> "$SUB_FILE" ;;
+        esac
+      done <<< "$(grep -o 'vless://[^#]*' "$info_file" | sort -u)"
     else
       ip="$(curl -4 -sSL --connect-timeout 5 --retry 1 ip.sb 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
       [ -z "$ip" ] && ip="YOUR_SERVER_IP"
