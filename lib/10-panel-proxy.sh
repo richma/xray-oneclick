@@ -1,9 +1,9 @@
 # 面板 HTTPS 反向代理: Caddyfile 生成与 cmd_panel_proxy
 gen_panel_caddyfile() {
-  local out="$1" dom="$2" pport="$3" wport="$4" gw="$5" pass="${6:-}"
+  local out="$1" dom="$2" pport="$3" wport="$4" gw="$5" pass="${6:-}" email="${7:-}"
   {
     echo "{"
-    echo "	{\$CADDY_EMAIL_LINE}"
+    [ -n "$email" ] && echo "	email $email"
     echo "	auto_https disable_redirects"
     echo "	key_type p256"
     echo "}"
@@ -74,7 +74,7 @@ cmd_panel_proxy() {
     [ -n "$network" ] || network="tcp"
     [ -n "$uuid" ] || uuid="$(node_field "$data_dir/data/reality_config_info.txt" uuid)"
 
-    gen_panel_caddyfile "$data_dir/Caddyfile" "$DOMAIN_ARG" "$PANEL_PROXY_PORT" "$XUI_PORT" "$gw" "$PANEL_PROXY_PASS"
+    gen_panel_caddyfile "$data_dir/Caddyfile" "$DOMAIN_ARG" "$PANEL_PROXY_PORT" "$XUI_PORT" "$gw" "$PANEL_PROXY_PASS" "$email"
     ok "Caddyfile 已生成: $data_dir/Caddyfile (含面板反代站点)"
 
     SHORTIDS="$shortids" MIN_CLIENT_VER="$minver" \
