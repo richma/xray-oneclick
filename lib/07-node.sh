@@ -253,7 +253,8 @@ update_subscription() {
 }
 
 show_node_card() {
-  local node_dir="$1" info_file="$node_dir/data/reality_config_info.txt"
+  local node_dir="$1"
+  local info_file="$node_dir/data/reality_config_info.txt"
   if [ -s "$info_file" ]; then
     banner "══════════ 节点配置信息 (含二维码) ══════════"
     sed 's/^PRIVATEKEY: .*/PRIVATEKEY: ******** (已隐藏, 真值在 data\/reality_state.json)/' "$info_file"
