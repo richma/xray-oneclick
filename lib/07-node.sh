@@ -66,6 +66,7 @@ WRAPPER_EOF
     -e NETWORK="$network"
     -e DEST="$dest"
     -e SERVERNAMES="$sn"
+    -e HIDE_SENSITIVE_INFO=true
   )
   [ -n "$uuid_opt" ] && args+=(-e UUID="$uuid_opt")
   [ -n "${SHORTIDS:-}" ] && args+=(-e SHORTIDS="$SHORTIDS")
@@ -111,11 +112,35 @@ WRAPPER_EOF
 
   args+=("$REALITY_IMAGE")
 
-  docker rm -f "$name" >/dev/null 2>&1 || true
-  info "启动 Reality 节点容器: $name (端口 $port / $network) ..."
-  docker run "${args[@]}" || die "容器启动失败, 请查看: docker logs $name"
+  # 旧容器先停+改名暂存: 新容器起不来时可以原样回滚, 不再"先删后建"
+  local old="${name}.old" had_old=0
+  docker rm -f "$old" >/dev/null 2>&1 || true
+  if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+    had_old=1
+    docker stop "$name" >/dev/null 2>&1 || true
+    docker rename "$name" "$old" || die "无法暂存旧容器 $name, 已中止 (旧容器未改动)"
+  fi
 
-  wait_node_ready "$name" "$node_dir/data/reality_config_info.txt"
+  info "启动 Reality 节点容器: $name (端口 $port / $network) ..."
+  if ! docker run "${args[@]}"; then
+    if [ "$had_old" = 1 ]; then
+      docker rm -f "$name" >/dev/null 2>&1 || true
+      docker rename "$old" "$name" && docker start "$name" >/dev/null 2>&1 || true
+      die "容器启动失败, 已回滚旧容器 $name; 请查看: docker logs $name"
+    fi
+    die "容器启动失败, 请查看: docker logs $name"
+  fi
+
+  if ! wait_node_ready "$name" "$node_dir/data/reality_config_info.txt"; then
+    docker rm -f "$name" >/dev/null 2>&1 || true
+    if [ "$had_old" = 1 ]; then
+      docker rename "$old" "$name" && docker start "$name" >/dev/null 2>&1 || true
+      die "新容器未就绪, 已回滚旧容器 $name; 请查看: docker logs $name"
+    fi
+    die "新容器未就绪, 请查看: docker logs $name"
+  fi
+  [ "$had_old" = 1 ] && docker rm -f "$old" >/dev/null 2>&1 || true
+  secure_node_secrets "$node_dir"
   save_node "$port" "$name" "$network" "$node_dir" "$domain"
   update_subscription
   show_node_card "$node_dir"
@@ -129,21 +154,49 @@ wait_node_ready() {
       return 0
     fi
     if ! docker ps --filter "name=^/${name}$" --format '{{.Names}}' | grep -qx "$name"; then
-      die "容器 $name 已退出, 请查看日志: docker logs $name"
+      warn "容器 $name 已退出, 请查看日志: docker logs $name"
+      return 1
     fi
     sleep 2
   done
   warn "等待 $name 生成配置超时, 可稍后执行: bash install.sh info"
 }
 
+# 节点数据目录含 Reality 私钥(reality_state.json), 收紧到 root-only
+secure_node_secrets() {
+  local node_dir="$1"
+  chmod 700 "$node_dir/data" 2>/dev/null || true
+  chmod 600 "$node_dir/data/reality_state.json" 2>/dev/null || true
+  chmod 600 "$node_dir/data/reality_config_info.txt" 2>/dev/null || true
+}
+
+# 镜像在 HIDE_SENSITIVE_INFO=true 时会把 info 文件里的 uuid/密钥打码,
+# 真值落在同目录 reality_state.json, 这里作为回退来源
+node_state_field() {
+  local info_file="$1" key="$2" state
+  state="$(dirname "$info_file")/reality_state.json"
+  [ -s "$state" ] || return 0
+  sed -n "s/.*\"${key}\":\"\([^\"]*\)\".*/\1/p" "$state" | head -1
+}
+
 node_field() {
   local info_file="$1" field="$2"
   case "$field" in
-    uuid)      sed -n 's/^UUID: //p' "$info_file" | head -1 ;;
+    uuid)
+      local v
+      v="$(sed -n 's/^UUID: //p' "$info_file" | head -1)"
+      case "$v" in *'*'*) v="" ;; esac
+      [ -n "$v" ] || v="$(node_state_field "$info_file" uuid)"
+      echo "$v" ;;
     dest)      sed -n 's/^DEST: //p' "$info_file" | head -1 ;;
     port)      sed -n 's/^PORT: //p' "$info_file" | head -1 ;;
     servernames) sed -n 's/^SERVERNAMES: //p' "$info_file" | head -1 | sed 's/ (.*$//' ;;
-    pub)       sed -n 's/^PUBLICKEY\/PASSWORD: //p' "$info_file" | head -1 ;;
+    pub)
+      local pk
+      pk="$(sed -n 's/^PUBLICKEY\/PASSWORD: //p' "$info_file" | head -1)"
+      case "$pk" in *'*'*) pk="" ;; esac
+      [ -n "$pk" ] || pk="$(node_state_field "$info_file" public_key)"
+      echo "$pk" ;;
     net)       sed -n 's/^NETWORK: //p' "$info_file" | head -1 ;;
     shortid)   sed -n 's/^SHORTID: //p' "$info_file" | head -1 | awk '{print $1}' ;;
     xhttp_path) sed -n 's/^XHTTP_PATH: //p' "$info_file" | head -1 ;;
@@ -203,7 +256,7 @@ show_node_card() {
   local node_dir="$1" info_file="$node_dir/data/reality_config_info.txt"
   if [ -s "$info_file" ]; then
     banner "══════════ 节点配置信息 (含二维码) ══════════"
-    cat "$info_file"
+    sed 's/^PRIVATEKEY: .*/PRIVATEKEY: ******** (已隐藏, 真值在 data\/reality_state.json)/' "$info_file"
     banner "════════════════════════════════════════════"
   fi
 }

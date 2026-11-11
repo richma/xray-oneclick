@@ -3,6 +3,7 @@ gen_panel_caddyfile() {
   local out="$1" dom="$2" pport="$3" wport="$4" gw="$5" pass="${6:-}"
   {
     echo "{"
+    echo "	{\$CADDY_EMAIL_LINE}"
     echo "	auto_https disable_redirects"
     echo "	key_type p256"
     echo "}"

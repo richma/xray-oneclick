@@ -152,10 +152,13 @@ cmd_cluster_add_node() {
   local path="${NODE_PATH:-/}"
   local scheme="${NODE_SCHEME:-http}"
   local sync="${NODE_SYNC:-all}"
-  local allow=false tls="skip"
+  local allow=false tls="verify"
   [ "${NODE_ALLOW_PRIVATE:-0}" = 1 ] && allow=true
-  [ "${NODE_TLS_SKIP:-1}" = 0 ] && tls="verify"
-  [ "$scheme" = "https" ] && [ "${NODE_TLS_SKIP:-1}" = 1 ] && tls="skip"
+  [ "${NODE_TLS_SKIP:-0}" = 1 ] && tls="skip"
+  if [ "$scheme" != "https" ] || [ "$tls" = "skip" ]; then
+    warn "子节点连接未加密或跳过证书校验 ($scheme, tls=$tls): node-sync Token 可能在链路上被抓取"
+    warn "建议改用 --node-scheme https (自签证书再加 --tls-skip 显式降级)"
+  fi
   [ -n "${XUI_TOKEN:-}" ] || xui_login
   local body resp
   body="$(cluster_node_body "$NODE_NAME" "$NODE_ADDRESS" "$port" "$path" "$NODE_TOKEN" "$scheme" "$sync" "$allow" "$tls")"

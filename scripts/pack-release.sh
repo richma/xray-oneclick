@@ -22,6 +22,15 @@ if [ -f "$ROOT/docs/部署与使用手册.md" ]; then
   cp -a "$ROOT/docs/部署与使用手册.md" "$STAGE/docs/"
 fi
 
+# Windows / core.autocrlf 检出的工作区会把 CR 带进发布包, Linux 上 bash 直接崩;
+# 打包前统一归一为 LF, 并断言没有任何 .sh 残留 CR.
+find "$STAGE" -type f \( -name '*.sh' -o -name '*.conf' -o -name '*.json' -o -name '*.md' \) \
+  -exec sed -i 's/\r$//' {} +
+if find "$STAGE" -type f -name '*.sh' -exec grep -lI $'\r' {} + | grep -q .; then
+  echo "错误: 发布包内仍有 CRLF 脚本" >&2
+  exit 1
+fi
+
 TAR="xray-oneclick-v${VER}.tar.gz"
 tar -C "$OUT" -czf "$OUT/$TAR" xray-oneclick
 cp -f "$OUT/$TAR" "$OUT/xray-oneclick.tar.gz"

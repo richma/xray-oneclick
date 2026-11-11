@@ -45,9 +45,11 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
   --share-uuid <UUID>  cluster-share: 共享 UUID (默认新生成)
   --host-inbound <id>  cluster-host: 入站 ID
   --host-addr <主机>   cluster-host: 覆盖地址 (可带 :端口)
-  --host-remark <备注>
+  --host-remark <备注> cluster-host: 订阅备注 (默认同地址)
+  --host-sni <主机>    cluster-host: 覆盖订阅 SNI
   --allow-private      允许主面板连接私网地址的子节点
-  --tls-verify         HTTPS 子节点校验证书 (默认 skip)
+  --tls-verify         HTTPS 子节点校验证书 (默认已开启)
+  --tls-skip           跳过 HTTPS 子节点证书校验 (自签证书时使用)
   -x, --no-3xui        不安装 3X-UI 面板
   -b, --no-bbr         跳过 BBR 与内核优化
   -c, --no-docker      跳过 Docker 安装 (已安装时)
@@ -58,7 +60,16 @@ Xray Reality + 3X-UI 一键安装脚本 v${VERSION}
 EOF
 }
 
+# 菜单暂停: stdin 已关闭 (EOF) 时直接退出, 避免 while true 空转
+menu_pause() { read -r -p "按回车返回菜单 ..." _ || exit 0; }
+
 menu() {
+  if [ ! -t 0 ]; then
+    warn "未检测到交互终端, 直接按默认参数执行安装 (等价 -y); 需要在菜单里操作请加 tty 或直接指定子命令"
+    INSTALL_DOCKER=1; INSTALL_3XUI=1; ENABLE_BBR=1; INSTALL_RULES=1
+    cmd_install
+    return 0
+  fi
   while true; do
     clear 2>/dev/null || true
     banner "╔════════════════════════════════════════════════════════════╗"
@@ -83,38 +94,38 @@ menu() {
     printf "  ${C_CYAN}16)${C_RESET} 卸载\n"
     printf "  ${C_CYAN}0)${C_RESET} 退出\n"
     echo ""
-    printf "请选择操作: "; read -r choice
+    printf "请选择操作: "; read -r choice || exit 0
     case "$choice" in
       1)
         INSTALL_DOCKER=1; INSTALL_3XUI=1; ENABLE_BBR=1; INSTALL_RULES=1
-        cmd_install; read -r -p "按回车返回菜单 ..." _
+        cmd_install; menu_pause
         ;;
       2) ENABLE_BBR=1; check_root; detect_os; apply_sysctl; enable_bbr
-         read -r -p "按回车返回菜单 ..." _ ;;
+         menu_pause ;;
       3) INSTALL_DOCKER=1; check_root; detect_os; install_docker; setup_docker_mirror
-         read -r -p "按回车返回菜单 ..." _ ;;
+         menu_pause ;;
       4) INSTALL_3XUI=0; INSTALL_DOCKER=1; ENABLE_BBR=0; INSTALL_RULES=1
-         cmd_install; read -r -p "按回车返回菜单 ..." _ ;;
+         cmd_install; menu_pause ;;
       5) INSTALL_3XUI=1; check_root; command -v docker >/dev/null 2>&1 || install_docker
          install_3xui; open_firewall "$XUI_PORT"
-         read -r -p "按回车返回菜单 ..." _ ;;
-      6) cmd_add_node; read -r -p "按回车返回菜单 ..." _ ;;
-      7) cmd_update_rules; read -r -p "按回车返回菜单 ..." _ ;;
-      8) cmd_info; read -r -p "按回车返回菜单 ..." _ ;;
-      9) ask "请输入要开放的端口" ""; cmd_xui_port $ANSWER; read -r -p "按回车返回菜单 ..." _ ;;
+         menu_pause ;;
+      6) cmd_add_node; menu_pause ;;
+      7) cmd_update_rules; menu_pause ;;
+      8) cmd_info; menu_pause ;;
+      9) ask "请输入要开放的端口" ""; cmd_xui_port $ANSWER; menu_pause ;;
       10) ask "请输入面板域名" ""; DOMAIN_ARG="$ANSWER"
-          cmd_panel_proxy; read -r -p "按回车返回菜单 ..." _ ;;
-      11) cmd_sub_server; read -r -p "按回车返回菜单 ..." _ ;;
-      12) cmd_cluster_token; read -r -p "按回车返回菜单 ..." _ ;;
+          cmd_panel_proxy; menu_pause ;;
+      11) cmd_sub_server; menu_pause ;;
+      12) cmd_cluster_token; menu_pause ;;
       13) ask "子节点名称" ""; NODE_NAME="$ANSWER"
           ask "子节点地址" ""; NODE_ADDRESS="$ANSWER"
           ask "子节点面板端口" "$XUI_PORT"; NODE_PORT="$ANSWER"
           ask "子节点面板路径" "/"; NODE_PATH="$ANSWER"
           ask "子节点 node-sync Token" ""; NODE_TOKEN="$ANSWER"
-          cmd_cluster_add_node; read -r -p "按回车返回菜单 ..." _ ;;
-      14) cmd_cluster_share; read -r -p "按回车返回菜单 ..." _ ;;
-      15) cmd_cluster_status; read -r -p "按回车返回菜单 ..." _ ;;
-      16) cmd_uninstall; read -r -p "按回车返回菜单 ..." _ ;;
+          cmd_cluster_add_node; menu_pause ;;
+      14) cmd_cluster_share; menu_pause ;;
+      15) cmd_cluster_status; menu_pause ;;
+      16) cmd_uninstall; menu_pause ;;
       0) exit 0 ;;
       *) warn "无效选项" ;;
     esac

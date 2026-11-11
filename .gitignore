@@ -14,6 +14,9 @@ cluster-share.txt
 sub-server.token
 /sub-www/
 
+# Agent / 插件运行时状态（切勿提交）
+/.omo/
+
 # ============ 系统 / 编辑器 ============
 .DS_Store
 Thumbs.db

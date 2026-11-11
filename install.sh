@@ -69,7 +69,7 @@ NODE_TOKEN=""
 NODE_SCHEME="http"
 NODE_SYNC="all"
 NODE_ALLOW_PRIVATE=0
-NODE_TLS_SKIP=1
+NODE_TLS_SKIP=0
 SHARE_EMAIL="main"
 SHARE_SUBID="main"
 SHARE_UUID=""
@@ -195,6 +195,7 @@ while [ $# -gt 0 ]; do
     --host-sni) need_val "$@"; HOST_SNI="$2"; shift 2 ;;
     --allow-private) NODE_ALLOW_PRIVATE=1; shift ;;
     --tls-verify) NODE_TLS_SKIP=0; shift ;;
+    --tls-skip) NODE_TLS_SKIP=1; shift ;;
     -x|--no-3xui) INSTALL_3XUI=0; shift ;;
     -b|--no-bbr) ENABLE_BBR=0; shift ;;
     -c|--no-docker) INSTALL_DOCKER=0; shift ;;
