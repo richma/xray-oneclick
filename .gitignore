@@ -16,6 +16,8 @@ sub-server.token
 
 # Agent / 插件运行时状态（切勿提交）
 /.omo/
+/.agents/
+/skills-lock.json
 
 # ============ 系统 / 编辑器 ============
 .DS_Store
